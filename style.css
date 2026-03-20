@@ -438,14 +438,20 @@ body {
 .gantt-track { flex: 1; height: 28px; position: relative; background: var(--eq-gray-100); border-radius: 4px; }
 .gantt-bar {
   position: absolute; height: 100%;
-  border-radius: 4px; display: flex; align-items: center;
-  padding: 0 8px; font-size: 0.72rem; font-weight: 600; color: var(--white);
-  white-space: nowrap; overflow: hidden;
+  border-radius: 4px;
   cursor: pointer; transition: filter .15s;
+  min-width: 6px;
 }
 .gantt-bar:hover { filter: brightness(1.15); }
 .gantt-bar.retrabalho { background: linear-gradient(90deg, var(--eq-red), #E53935); }
 .gantt-bar.normal { background: linear-gradient(90deg, var(--eq-blue), var(--eq-blue-mid)); }
+.gantt-bar-label {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  font-size: 0.72rem; font-weight: 600;
+  color: var(--eq-gray-700);
+  white-space: nowrap;
+  pointer-events: none;
+}
 
 .gantt-axis {
   display: flex; margin-left: 142px;
@@ -466,8 +472,13 @@ body {
 
 /* ===== ALERTAS PAGE ===== */
 .alert-stats {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 16px; margin-bottom: 32px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 32px;
+}
+@media(max-width: 520px) {
+  .alert-stats { grid-template-columns: 1fr; }
 }
 .stat-card {
   background: var(--white);
