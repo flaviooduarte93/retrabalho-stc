@@ -213,6 +213,24 @@ document.addEventListener('DOMContentLoaded', () => {
   btn.addEventListener('click', () => pesquisarUC(input.value));
   input.addEventListener('keydown', e => { if (e.key==='Enter') pesquisarUC(input.value); });
 
+  // Posiciona tooltip perto do cursor, sempre dentro da viewport
+  document.addEventListener('mousemove', e => {
+    const tooltip = document.querySelector('.tl-dot:hover .tl-tooltip');
+    if (!tooltip) return;
+    const tw = 220, th = 120; // largura/altura aprox do tooltip
+    const margin = 12;
+    let x = e.clientX - tw / 2;
+    let y = e.clientY - th - margin;
+    // Evita sair pela direita
+    if (x + tw > window.innerWidth - 8) x = window.innerWidth - tw - 8;
+    // Evita sair pela esquerda
+    if (x < 8) x = 8;
+    // Evita sair pelo topo — aparece abaixo do cursor
+    if (y < 8) y = e.clientY + margin;
+    tooltip.style.left = x + 'px';
+    tooltip.style.top  = y + 'px';
+  });
+
   // Breadcrumb dinâmico conforme origem
   const params    = new URLSearchParams(window.location.search);
   const ucParam   = params.get('uc');

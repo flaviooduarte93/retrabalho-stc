@@ -502,23 +502,23 @@ body {
 
 /* Tooltip ao hover */
 .tl-tooltip {
-  position: absolute;
-  bottom: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%);
+  position: fixed;
   background: var(--eq-gray-900);
   color: var(--white);
   border-radius: var(--radius-sm);
-  padding: 10px 14px;
-  min-width: 240px;
-  font-size: 0.75rem;
-  line-height: 1.6;
-  white-space: nowrap;
+  padding: 8px 12px;
+  width: 220px;
+  font-size: 0.73rem;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-word;
   pointer-events: none;
   opacity: 0;
-  z-index: 200;
+  z-index: 9999;
   box-shadow: var(--shadow-lg);
   transition: opacity .15s;
+  /* posicionado via JS */
+  top: 0; left: 0;
 }
 .tl-tooltip::after {
   content: '';
@@ -530,14 +530,14 @@ body {
 .tl-dot:hover .tl-tooltip { opacity: 1; }
 
 .tl-tooltip-num {
-  font-size: 0.68rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.5px; color: var(--eq-gray-400); margin-bottom: 4px;
+  font-size: 0.65rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--eq-gray-400); margin-bottom: 3px;
 }
 .tl-tooltip-os {
-  font-weight: 700; font-size: 0.82rem;
-  color: var(--eq-amber); margin-bottom: 6px;
+  font-weight: 700; font-size: 0.78rem;
+  color: var(--eq-amber); margin-bottom: 5px;
 }
-.tl-tooltip-row { color: rgba(255,255,255,0.8); font-size: 0.73rem; }
+.tl-tooltip-row { color: rgba(255,255,255,0.8); font-size: 0.7rem; }
 
 /* Eixo de datas */
 .gantt-axis {
