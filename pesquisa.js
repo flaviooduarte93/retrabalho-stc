@@ -35,26 +35,29 @@ function renderGantt(historico) {
       .toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}));
   }
 
-  // Marcadores
+  // Marcadores + dias entre eles
   const markers = sorted.map((h, i) => {
-    const pos     = ((new Date(h.dataOrigem) - minDate) / totalMs * 100).toFixed(2);
-    const isRet   = calcRetrabalho(h.dataConc);
-    const isLast  = i === sorted.length - 1;
-    const color   = isLast ? 'var(--eq-blue)' : (isRet ? 'var(--eq-red)' : 'var(--eq-blue)');
+    const pos      = ((new Date(h.dataOrigem) - minDate) / totalMs * 100).toFixed(2);
+    const isRet    = calcRetrabalho(h.dataConc);
+    const color    = isRet && i < sorted.length - 1 ? 'var(--eq-red)' : 'var(--eq-blue)';
+    const num      = i + 1;
     const causaTip = (h.causa||'----').substring(0,45) + ((h.causa||'').length>45?'…':'');
-    const num     = i + 1;
 
-    // Alterna label acima/abaixo para evitar sobreposição
-    const labelPos = (i % 2 === 0) ? 'above' : 'below';
+    // Dias entre este e o próximo marcador
+    let diasBadge = '';
+    if (i < sorted.length - 1) {
+      const proxData = new Date(sorted[i+1].dataOrigem);
+      const dias = Math.round((proxData - new Date(h.dataOrigem)) / 86400000);
+      const midPos = (
+        ((new Date(h.dataOrigem) - minDate) / totalMs * 100 +
+         (proxData - minDate) / totalMs * 100) / 2
+      ).toFixed(2);
+      diasBadge = `<div class="tl-dias-badge" style="left:${midPos}%">${dias}d</div>`;
+    }
 
     return `
       <div class="tl-marker-wrap" style="left:${pos}%">
-        ${labelPos === 'above' ? `
-        <div class="tl-label tl-label--above">
-          <div class="tl-label-os">${h.os||'----'}</div>
-          <div class="tl-label-date">${fmtDateShort(h.dataOrigem)}</div>
-        </div>` : ''}
-        <div class="tl-dot" style="background:${color};border-color:${color}" data-idx="${num}">
+        <div class="tl-dot" style="background:${color};border-color:${color}">
           <span class="tl-dot-num">${num}</span>
           <div class="tl-tooltip">
             <div class="tl-tooltip-num">Atendimento ${num}</div>
@@ -64,12 +67,8 @@ function renderGantt(historico) {
             <div class="tl-tooltip-row">■ ${fmtDate(h.dataConc)}</div>
           </div>
         </div>
-        ${labelPos === 'below' ? `
-        <div class="tl-label tl-label--below">
-          <div class="tl-label-os">${h.os||'----'}</div>
-          <div class="tl-label-date">${fmtDateShort(h.dataOrigem)}</div>
-        </div>` : ''}
-      </div>`;
+      </div>
+      ${diasBadge}`;
   }).join('');
 
   const ticksHtml = ticks.map(t => `<div class="gantt-tick">${t}</div>`).join('');
@@ -104,23 +103,46 @@ function renderGantt(historico) {
 // ===== TABELA DE ATENDIMENTOS =====
 function renderHistoricoTable(historico) {
   if (!historico || !historico.length) return '';
+  // Ordena cronológico (mais antigo primeiro) para o # bater com o Gantt
   const sorted = [...historico].sort((a,b) =>
-    (b.dataOrigem||'') > (a.dataOrigem||'') ? 1 : -1);
-  const rows = sorted.map(h => `
-    <tr>
-      <td><strong>${h.os||'----'}</strong></td>
-      <td>${fmtDate(h.dataOrigem)}</td>
-      <td>${fmtDate(h.dataConc)}</td>
-      <td>${h.prefixo||'----'}</td>
-      <td>${h.causa||'----'}</td>
-    </tr>`).join('');
+    (a.dataOrigem||'') > (b.dataOrigem||'') ? 1 : -1);
+
+  const rows = sorted.map((h, i) => {
+    // Dias desde o atendimento anterior
+    let diasDesde = '----';
+    if (i > 0) {
+      const prev = new Date(sorted[i-1].dataOrigem);
+      const curr = new Date(h.dataOrigem);
+      const dias = Math.round((curr - prev) / 86400000);
+      diasDesde = `<span class="dias-entre-badge">${dias}d após atend. ${i}</span>`;
+    }
+    return `
+      <tr>
+        <td>
+          <span class="atend-num-badge">${i+1}</span>
+        </td>
+        <td><strong>${h.os||'----'}</strong></td>
+        <td>${fmtDate(h.dataOrigem)}</td>
+        <td>${fmtDate(h.dataConc)}</td>
+        <td>${h.prefixo||'----'}</td>
+        <td>${h.causa||'----'}</td>
+        <td>${diasDesde}</td>
+      </tr>`;
+  }).join('');
+
   return `
     <div style="margin-top:24px">
       <div class="gantt-title" style="margin-bottom:12px">Todos os Atendimentos</div>
       <div class="historico-table-wrap">
         <table class="historico-table">
           <thead><tr>
-            <th>OS</th><th>Data Início</th><th>Data Fim</th><th>Equipe</th><th>Causa</th>
+            <th style="width:40px">#</th>
+            <th>OS</th>
+            <th>Data Início</th>
+            <th>Data Fim</th>
+            <th>Equipe</th>
+            <th>Causa</th>
+            <th>Intervalo</th>
           </tr></thead>
           <tbody>${rows}</tbody>
         </table>

@@ -1146,3 +1146,53 @@ body {
 .sort-group {
   display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
 }
+
+/* ===== TIMELINE — dias entre marcadores e badge ID tabela ===== */
+
+/* Badge de dias entre dois marcadores na linha do tempo */
+.tl-dias-badge {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--white);
+  border: 1.5px solid var(--eq-gray-200);
+  border-radius: 20px;
+  padding: 2px 8px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--eq-gray-600);
+  white-space: nowrap;
+  z-index: 5;
+  box-shadow: var(--shadow-sm);
+  pointer-events: none;
+}
+
+/* Remove labels da linha do tempo (não usamos mais) */
+.tl-label { display: none; }
+
+/* Badge numérico na tabela (#) */
+.atend-num-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: var(--eq-blue);
+  color: var(--white);
+  font-size: 0.72rem;
+  font-weight: 800;
+  font-family: var(--font-display);
+  flex-shrink: 0;
+}
+
+/* Badge de intervalo entre atendimentos */
+.dias-entre-badge {
+  display: inline-block;
+  background: var(--eq-blue-pale);
+  color: var(--eq-blue-dark);
+  border-radius: 20px;
+  padding: 2px 10px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
