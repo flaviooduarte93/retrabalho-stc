@@ -222,3 +222,23 @@ document.addEventListener('DOMContentLoaded', () => {
     pesquisarUC(ucParam);
   }
 });
+
+// Detecta se veio da tela de alertas e adiciona botão de retorno
+(function() {
+  function initBackButton() {
+    const params    = new URLSearchParams(window.location.search);
+    const fromParam = params.get('from');
+    if (fromParam !== 'alertas') return;
+    const topbar = document.querySelector('.topbar');
+    if (!topbar) return;
+    const backAlertas = document.createElement('a');
+    backAlertas.href = 'alertas.html';
+    backAlertas.className = 'topbar-back';
+    backAlertas.style.cssText = 'margin-left:16px;color:#F9A825;border:1px solid rgba(249,168,37,0.45);padding:4px 14px;border-radius:20px;font-size:0.82rem;';
+    backAlertas.innerHTML = '← Voltar aos Alertas';
+    const existingBack = topbar.querySelector('.topbar-back');
+    if (existingBack) existingBack.insertAdjacentElement('afterend', backAlertas);
+    else topbar.appendChild(backAlertas);
+  }
+  document.addEventListener('DOMContentLoaded', initBackButton);
+})();

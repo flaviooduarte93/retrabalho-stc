@@ -9,12 +9,10 @@ function parseDate(val) {
   if (!val) return null;
   if (val instanceof Date) return val;
   if (typeof val === 'number') {
-    // Excel serial date
     const d = new Date((val - 25569) * 86400 * 1000);
     return isNaN(d) ? null : d;
   }
   if (typeof val === 'string') {
-    // dd/mm/yyyy hh:mm:ss  or  yyyy-mm-dd...
     const s = val.trim();
     const m1 = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*(\d{2}:\d{2}:\d{2})?/);
     if (m1) return new Date(`${m1[3]}-${m1[2]}-${m1[1]}T${m1[4] || '00:00:00'}`);
@@ -24,11 +22,6 @@ function parseDate(val) {
   return null;
 }
 
-function fmtDate(d) {
-  if (!d) return '';
-  return d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
-}
-
 function setStatus(elId, msg, type) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -36,10 +29,36 @@ function setStatus(elId, msg, type) {
   el.className = 'upload-status ' + (type || '');
 }
 
+async function deleteCollection(colName) {
+  const BATCH_SIZE = 400;
+  let snap = await db.collection(colName).limit(500).get();
+  let toDelete = snap.docs.map(d => d.ref);
+  while (toDelete.length) {
+    const batch = db.batch();
+    toDelete.splice(0, BATCH_SIZE).forEach(ref => batch.delete(ref));
+    await batch.commit();
+    const next = await db.collection(colName).limit(500).get();
+    toDelete = next.docs.map(d => d.ref);
+  }
+}
+
 // ============================================================
 // BASE HISTÓRICA (Composição do Balde)
-// Colunas relevantes: UC, OS, DATA_ORIGEM, OCO_DATA_CONCLUSAO, PREFIXO,
-//                     TIPO_CONCLUSAO_ORIGEM, OS_ORIGEM
+//
+// Estrutura do arquivo: cada linha representa um PAR de atendimentos
+//   OS_ORIGEM → OS  (o OS_ORIGEM gerou o retrabalho OS)
+//
+// Colunas:
+//   OS_ORIGEM, PREFIXO_ORIGEM, TIPO_CONCLUSAO_ORIGEM
+//   DATA_ORIGEM_1º ATEND., DATA_CONCLUSAO_1º ATEND.   ← dados do OS_ORIGEM
+//   OS, PREFIXO, DATA_ORIGEM, OCO_DATA_CONCLUSAO       ← dados do OS (retrabalho)
+//
+// Quando uma UC tem 3 atendimentos (827→105929→149372):
+//   Linha 1: OS_ORIGEM=827,    OS=105929
+//   Linha 2: OS_ORIGEM=105929, OS=149372
+//   → 105929 aparece duas vezes: como OS (linha1) e como OS_ORIGEM (linha2)
+//   → Usar os dados de quando é OS_ORIGEM (linha2) para preencher 105929,
+//     pois nessa linha as colunas DATA_ORIGEM_1º ATEND. têm as datas corretas dele.
 // ============================================================
 
 async function processHistorico(file) {
@@ -49,14 +68,8 @@ async function processHistorico(file) {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
 
-  if (!rows.length) {
-    setStatus('status-historico', '❌ Arquivo vazio ou inválido.', 'error');
-    return;
-  }
-
-  // Validação mínima das colunas esperadas
-  const r0 = rows[0];
-  if (!('UC' in r0) || !('OS' in r0)) {
+  if (!rows.length) { setStatus('status-historico', '❌ Arquivo vazio ou inválido.', 'error'); return; }
+  if (!('UC' in rows[0]) || !('OS' in rows[0])) {
     setStatus('status-historico', '❌ Estrutura inválida. Verifique o arquivo.', 'error');
     return;
   }
@@ -74,70 +87,93 @@ async function processHistorico(file) {
 
   setStatus('status-historico', `⏳ Salvando ${Object.keys(byUC).length} UCs no Firebase...`, 'loading');
 
-  // Apaga coleção anterior e recria
-  // Para não exceder cotas, usa batch writes
+  await deleteCollection('historico');
+
   const BATCH_SIZE = 400;
-
-  // 1. Deleta todos os docs da coleção historico
-  const snapshot = await db.collection('historico').limit(500).get();
-  let toDelete = snapshot.docs.map(d => d.ref);
-  while (toDelete.length) {
-    const batch = db.batch();
-    toDelete.splice(0, BATCH_SIZE).forEach(ref => batch.delete(ref));
-    await batch.commit();
-    // Verifica se há mais
-    const next = await db.collection('historico').limit(500).get();
-    toDelete = next.docs.map(d => d.ref);
-  }
-
-  // 2. Grava novos docs
   const ucKeys = Object.keys(byUC);
   let idx = 0;
+
   while (idx < ucKeys.length) {
     const batch = db.batch();
     const slice = ucKeys.slice(idx, idx + BATCH_SIZE);
+
     for (const uc of slice) {
       const registros = byUC[uc];
 
-      // Conta total de atendimentos (OS únicas na UC)
-      const osSet = new Set();
-      for (const r of registros) {
-        if (r['OS']) osSet.add(String(r['OS']));
-        if (r['OS_ORIGEM']) osSet.add(String(r['OS_ORIGEM']));
-      }
-      const qtdAtendimentos = osSet.size;
+      // ----------------------------------------------------------------
+      // PASSO 1: Monta mapa de atendimentos com desduplicação encadeada
+      //
+      // Para cada OS que aparece como OS_ORIGEM em alguma linha,
+      // usamos os dados DESSA linha (colunas DATA_ORIGEM_1º ATEND. etc.)
+      // porque elas representam com precisão as datas daquele atendimento.
+      //
+      // Para o último OS (nunca aparece como OS_ORIGEM), usamos as colunas
+      // DATA_ORIGEM / OCO_DATA_CONCLUSAO / PREFIXO da própria linha.
+      // ----------------------------------------------------------------
 
-      // Último atendimento = maior DATA_ORIGEM
-      let ultimoReg = registros[0];
+      // Conjunto de todas as OS que aparecem como OS_ORIGEM (atendimentos intermediários/primeiros)
+      const osQueEhOrigem = new Set(registros.map(r => String(r['OS_ORIGEM'] || '').trim()).filter(Boolean));
+
+      const osMap = {}; // chave: número da OS, valor: dados do atendimento
+
       for (const r of registros) {
-        const d1 = parseDate(r['DATA_ORIGEM']);
-        const d2 = parseDate(ultimoReg['DATA_ORIGEM']);
-        if (d1 && d2 && d1 > d2) ultimoReg = r;
+        const osAtual  = String(r['OS'] || '').trim();
+        const osOrigem = String(r['OS_ORIGEM'] || '').trim();
+
+        // --- Registra o OS_ORIGEM (1º ou intermediário) ---
+        // Sempre sobrescreve com dados desta linha, pois as colunas
+        // DATA_ORIGEM_1º ATEND. / DATA_CONCLUSAO_1º ATEND. são as mais precisas
+        // para este atendimento.
+        if (osOrigem) {
+          osMap[osOrigem] = {
+            os:        osOrigem,
+            dataOrigem: parseDate(r['DATA_ORIGEM_1º ATEND.'])?.toISOString() || null,
+            dataConc:   parseDate(r['DATA_CONCLUSAO_1º ATEND.'])?.toISOString() || null,
+            prefixo:   String(r['PREFIXO_ORIGEM'] || '') || '----',
+            causa:     String(r['TIPO_CONCLUSAO_ORIGEM'] || '') || '----',
+          };
+        }
+
+        // --- Registra o OS atual (último ou intermediário) ---
+        // Só registra se esta OS NÃO aparece como OS_ORIGEM em nenhuma outra linha
+        // (ou seja, é o atendimento mais recente / final da cadeia)
+        // Se ela APARECE como origem em outra linha, os dados dela já foram/serão
+        // preenchidos acima com mais precisão.
+        if (osAtual && !osQueEhOrigem.has(osAtual)) {
+          osMap[osAtual] = {
+            os:        osAtual,
+            dataOrigem: parseDate(r['DATA_ORIGEM'])?.toISOString() || null,
+            dataConc:   parseDate(r['OCO_DATA_CONCLUSAO'])?.toISOString() || null,
+            prefixo:   String(r['PREFIXO'] || '') || '----',
+            causa:     String(r['TIPO_CONCLUSAO_ORIGEM'] || '') || '----',
+          };
+        }
       }
 
-      const dtOrigem = parseDate(ultimoReg['DATA_ORIGEM']);
-      const dtConc   = parseDate(ultimoReg['OCO_DATA_CONCLUSAO']);
+      // Ordena cronologicamente
+      const historicoList = Object.values(osMap)
+        .sort((a, b) => (a.dataOrigem || '') > (b.dataOrigem || '') ? 1 : -1);
+
+      const qtdAtendimentos = historicoList.length;
+
+      // Último atendimento = maior dataOrigem
+      const ultimoAtend = [...historicoList]
+        .sort((a, b) => (b.dataOrigem || '') > (a.dataOrigem || '') ? 1 : -1)[0] || {};
 
       const docData = {
         uc,
-        ultimaOS:        String(ultimoReg['OS'] || ''),
-        dataOrigem:      dtOrigem ? dtOrigem.toISOString() : null,
-        dataConc:        dtConc   ? dtConc.toISOString()   : null,
-        prefixo:         String(ultimoReg['PREFIXO'] || ''),
-        causa:           String(ultimoReg['TIPO_CONCLUSAO_ORIGEM'] || ''),
+        ultimaOS:       ultimoAtend.os        || '----',
+        dataOrigem:     ultimoAtend.dataOrigem || null,
+        dataConc:       ultimoAtend.dataConc   || null,
+        prefixo:        ultimoAtend.prefixo    || '----',
+        causa:          ultimoAtend.causa      || '----',
         qtdAtendimentos,
-        historico: registros.map(r => ({
-          os:        String(r['OS'] || ''),
-          osOrigem:  String(r['OS_ORIGEM'] || ''),
-          dataOrigem: parseDate(r['DATA_ORIGEM'])?.toISOString() || null,
-          dataConc:   parseDate(r['OCO_DATA_CONCLUSAO'])?.toISOString() || null,
-          prefixo:   String(r['PREFIXO'] || ''),
-          causa:     String(r['TIPO_CONCLUSAO_ORIGEM'] || ''),
-        }))
+        historico: historicoList
       };
 
       batch.set(db.collection('historico').doc(uc), docData);
     }
+
     await batch.commit();
     idx += BATCH_SIZE;
     setStatus('status-historico', `⏳ Salvando... ${Math.min(idx, ucKeys.length)}/${ucKeys.length}`, 'loading');
@@ -148,8 +184,7 @@ async function processHistorico(file) {
 
 // ============================================================
 // BASE VISUALIZAÇÃO ATUAL (Decômetro)
-// Header real começa na linha 1 (índice 1 do array), dados a partir da linha 2
-// Colunas: Número (ocorrência), Estado (situação), Ponto Elétrico, Equipe, Data Início, Data Fim
+// Filtro: somente Abrangência == "CR"
 // ============================================================
 
 async function processAtual(file) {
@@ -157,26 +192,22 @@ async function processAtual(file) {
   const data = await file.arrayBuffer();
   const wb = XLSX.read(data);
   const ws = wb.Sheets[wb.SheetNames[0]];
-  // O arquivo tem 2 linhas de cabeçalho; a linha 1 (índice 0) é título e linha 2 (índice 1) é o header real
   const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-  // Encontra a linha de header (contém "Número")
+  // Encontra linha de header (contém "Número")
   let headerIdx = -1;
   for (let i = 0; i < Math.min(5, allRows.length); i++) {
-    if (allRows[i].some(c => String(c).trim() === 'Número')) {
-      headerIdx = i;
-      break;
-    }
+    if (allRows[i].some(c => String(c).trim() === 'Número')) { headerIdx = i; break; }
   }
   if (headerIdx === -1) {
     setStatus('status-atual', '❌ Cabeçalho não encontrado. Verifique o arquivo.', 'error');
     return;
   }
 
-  const headers = allRows[headerIdx].map(h => String(h).trim());
+  const headers  = allRows[headerIdx].map(h => String(h).trim());
   const dataRows = allRows.slice(headerIdx + 1);
 
-  const rows = dataRows
+  let rows = dataRows
     .filter(r => r.some(c => c !== ''))
     .map(r => {
       const obj = {};
@@ -184,91 +215,80 @@ async function processAtual(file) {
       return obj;
     });
 
+  // *** FILTRO: somente Abrangência == "CR" ***
+  rows = rows.filter(r => String(r['Abrangência'] || '').trim().toUpperCase() === 'CR');
+
   if (!rows.length) {
-    setStatus('status-atual', '❌ Sem dados no arquivo.', 'error');
+    setStatus('status-atual', '❌ Nenhum registro com Abrangência "CR" encontrado.', 'error');
     return;
   }
 
-  setStatus('status-atual', `⏳ Processando ${rows.length} registros...`, 'loading');
+  setStatus('status-atual', `⏳ Processando ${rows.length} registros CR...`, 'loading');
 
   // Busca base histórica para merge
   const historicoSnap = await db.collection('historico').get();
   const historicoMap = {};
-  historicoSnap.forEach(doc => {
-    historicoMap[doc.id] = doc.data();
-  });
+  historicoSnap.forEach(doc => { historicoMap[doc.id] = doc.data(); });
 
-  // Apaga visao_atual existente
+  await deleteCollection('visao_atual');
+
   const BATCH_SIZE = 400;
-  const snapAtual = await db.collection('visao_atual').limit(500).get();
-  let toDelete = snapAtual.docs.map(d => d.ref);
-  while (toDelete.length) {
-    const batch = db.batch();
-    toDelete.splice(0, BATCH_SIZE).forEach(ref => batch.delete(ref));
-    await batch.commit();
-    const next = await db.collection('visao_atual').limit(500).get();
-    toDelete = next.docs.map(d => d.ref);
-  }
-
-  // Processa e salva
   let idx = 0;
+
   while (idx < rows.length) {
     const batch = db.batch();
     const slice = rows.slice(idx, idx + BATCH_SIZE);
 
     for (const row of slice) {
-      const ocorrencia = String(row['Número'] || '').trim();
-      const estado     = String(row['Estado'] || '').trim();
+      const ocorrencia    = String(row['Número'] || '').trim();
+      const estado        = String(row['Estado'] || '').trim();
       const pontoEletrico = String(row['Ponto Elétrico'] || '').trim();
-      const equipe     = String(row['Equipe'] || '').trim();
-      const dtInicio   = parseDate(row['Data Início']);
-      const dtFim      = parseDate(row['Data Fim']);
-      const seccional  = String(row['Seccional'] || '').trim();
-      const municipio  = String(row['Município'] || '').trim();
-      const motivo     = String(row['Motivo'] || '').trim();
-      const causa      = String(row['Causa'] || '').trim();
+      const equipe        = String(row['Equipe'] || '').trim();
+      const dtInicio      = parseDate(row['Data Início']);
+      const dtFim         = parseDate(row['Data Fim']);
+      const seccional     = String(row['Seccional'] || '').trim();
+      const municipio     = String(row['Município'] || '').trim();
+      const motivo        = String(row['Motivo'] || '').trim();
+      const causa         = String(row['Causa'] || '').trim();
 
-      // Extrai UC do Ponto Elétrico (tudo antes do " -")
-      const ucMatch = pontoEletrico.match(/^(.+?)\s*-/);
-      const uc = ucMatch ? ucMatch[1].trim() : pontoEletrico;
+      // Extrai UC: tudo antes do " - "
+      const ucMatch = pontoEletrico.match(/^(.+?)\s+-\s/);
+      const uc = ucMatch ? ucMatch[1].trim() : pontoEletrico.split(' -')[0].trim();
 
-      // Verifica se está no histórico
       const emHistorico = !!historicoMap[uc];
 
-      // Se FINALIZADA e está no histórico, verifica se deve atualizar histórico
-      if (estado === 'F-FINALIZADA' && emHistorico && dtInicio) {
-        const dtOrigHist = historicoMap[uc].dataOrigem ? new Date(historicoMap[uc].dataOrigem) : null;
-        if (dtOrigHist && dtInicio >= dtOrigHist) {
-          // Atualiza histórico com esta ocorrência mais recente
-          const histRef = db.collection('historico').doc(uc);
-          await histRef.update({
-            ultimaOS: ocorrencia,
-            dataOrigem: dtInicio ? dtInicio.toISOString() : null,
-            dataConc: dtFim ? dtFim.toISOString() : null,
-            prefixo: equipe,
-            causa: causa || motivo,
-          });
+      // Se FINALIZADA: atualiza histórico se mais recente e não entra nos alertas
+      if (estado === 'F-FINALIZADA') {
+        if (emHistorico && dtInicio) {
+          const dtOrigHist = historicoMap[uc].dataOrigem ? new Date(historicoMap[uc].dataOrigem) : null;
+          if (!dtOrigHist || dtInicio >= dtOrigHist) {
+            await db.collection('historico').doc(uc).update({
+              ultimaOS:   ocorrencia,
+              dataOrigem: dtInicio ? dtInicio.toISOString() : null,
+              dataConc:   dtFim    ? dtFim.toISOString()    : null,
+              prefixo:    equipe   || '----',
+              causa:      causa || motivo || '----',
+            });
+          }
         }
-        // Não adiciona à visao_atual se finalizada
         continue;
       }
 
       if (!ocorrencia) continue;
 
-      const docRef = db.collection('visao_atual').doc(ocorrencia);
-      batch.set(docRef, {
+      batch.set(db.collection('visao_atual').doc(ocorrencia), {
         ocorrencia,
         estado,
         pontoEletrico,
         uc,
-        equipe,
-        dtInicio: dtInicio ? dtInicio.toISOString() : null,
-        dtFim:    dtFim    ? dtFim.toISOString()    : null,
+        equipe:          equipe   || '----',
+        dtInicio:        dtInicio ? dtInicio.toISOString() : null,
+        dtFim:           dtFim    ? dtFim.toISOString()    : null,
         seccional, municipio, motivo, causa,
         emHistorico,
-        qtdAtendimentos: emHistorico ? historicoMap[uc].qtdAtendimentos : 0,
-        dataConc: emHistorico ? historicoMap[uc].dataConc : null,
-        causaHistorico: emHistorico ? historicoMap[uc].causa : '',
+        qtdAtendimentos: emHistorico ? (historicoMap[uc].qtdAtendimentos || 1) : 0,
+        dataConc:        emHistorico ? (historicoMap[uc].dataConc || null)     : null,
+        causaHistorico:  emHistorico ? (historicoMap[uc].causa    || '----')   : '----',
       });
     }
 
@@ -277,7 +297,7 @@ async function processAtual(file) {
     setStatus('status-atual', `⏳ Salvando... ${Math.min(idx, rows.length)}/${rows.length}`, 'loading');
   }
 
-  setStatus('status-atual', `✅ ${rows.length} ocorrências salvas!`, 'success');
+  setStatus('status-atual', `✅ ${rows.length} ocorrências CR salvas!`, 'success');
 }
 
 // ============================================================
