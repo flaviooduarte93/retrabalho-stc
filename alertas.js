@@ -59,7 +59,6 @@ async function carregarAlertas() {
     snapAtual.forEach(doc => ocorrencias.push(doc.data()));
 
     const comRetrabalho = ocorrencias.filter(o => o.emHistorico);
-    const semHistorico  = ocorrencias.filter(o => !o.emHistorico);
 
     // UCs que já têm alerta ativo (para não duplicar na seção de baixo)
     const ucsComAlerta = new Set(comRetrabalho.map(o => o.uc));
@@ -88,9 +87,6 @@ async function carregarAlertas() {
           <div class="stat-value">${comRetrabalho.length}</div>
           <div class="stat-label">Ocorrências com Retrabalho</div>
         </div>
-        <div class="stat-card warning">
-          <div class="stat-value">${semHistorico.length}</div>
-          <div class="stat-label">Ocorrências sem Histórico</div>
         </div>
         <div class="stat-card info">
           <div class="stat-value">${ocorrencias.length}</div>
@@ -138,33 +134,6 @@ async function carregarAlertas() {
       alertasHTML += `</div>`;
     }
 
-    // ===== ALERTAS SEM HISTÓRICO =====
-    alertasHTML += `
-      <div class="section-head" style="margin-top:36px">
-        <div class="section-count blue">${semHistorico.length}</div>
-        <h2>📋 Ocorrências sem Histórico na Base</h2>
-      </div>`;
-
-    if (!semHistorico.length) {
-      alertasHTML += `<div class="no-results" style="padding:32px 0"><p>Nenhuma ocorrência sem histórico.</p></div>`;
-    } else {
-      alertasHTML += `<div class="alert-list">`;
-      for (const o of semHistorico) {
-        alertasHTML += `
-          <div class="alert-item sem-historico">
-            <div class="alert-oc">#${o.ocorrencia}</div>
-            <div class="alert-body">
-              <div class="alert-uc">UC ${o.uc}</div>
-              <div class="alert-detail">${o.pontoEletrico||''} · Equipe: ${o.equipe||'----'} · ${fmtDate(o.dtInicio)}</div>
-            </div>
-            <div class="alert-badges">
-              <span class="badge ${estadoBadge(o.estado)}">${o.estado||'----'}</span>
-              <span class="badge badge-gray">Sem histórico</span>
-            </div>
-          </div>`;
-      }
-      alertasHTML += `</div>`;
-    }
 
     alertasEl.innerHTML = alertasHTML;
 
