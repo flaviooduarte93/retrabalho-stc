@@ -10,13 +10,12 @@ function fmtDateShort(iso) {
 }
 function diasRestantes(dataConc) {
   if (!dataConc) return null;
-  const fim = new Date(new Date(dataConc).getTime() + 91 * 86400000);
-  return Math.ceil((fim - new Date()) / 86400000);
+  return Math.ceil((new Date(new Date(dataConc).getTime() + 91*86400000) - new Date()) / 86400000);
 }
 function calcPct90(dataConc) {
   if (!dataConc) return 0;
   const inicio = new Date(dataConc);
-  const fim    = new Date(inicio.getTime() + 91 * 86400000);
+  const fim    = new Date(inicio.getTime() + 91*86400000);
   const hoje   = new Date();
   if (hoje >= fim)    return 100;
   if (hoje <= inicio) return 0;
@@ -42,6 +41,132 @@ function toggleDropdown(uid) {
   if (item) item.classList.toggle('dropdown-open', !isOpen);
 }
 
+// ===== DADOS GLOBAIS para ordenação =====
+let _ucsSemAlerta = [];
+
+function renderDropdowns(lista) {
+  const historicoEl = document.getElementById('historico-container');
+  if (!lista.length) {
+    historicoEl.querySelector('.dropdown-list').innerHTML =
+      `<div class="no-results" style="padding:32px 0"><p>Nenhuma UC em retrabalho sem ocorrência ativa no momento.</p></div>`;
+    return;
+  }
+
+  let html = '';
+  for (const h of lista) {
+    const pct     = calcPct90(h.dataConc);
+    const dias    = diasRestantes(h.dataConc);
+    const barCls  = pct >= 80 ? 'danger' : pct >= 50 ? 'warning' : 'safe';
+    const diasCls = dias <= 10 ? 'dias-critico' : dias <= 30 ? 'dias-alerta' : 'dias-ok';
+    const uid     = h.uc.replace(/\W/g, '_');
+
+    const atendRows = (h.historico || [])
+      .sort((a,b) => (b.dataOrigem||'') > (a.dataOrigem||'') ? 1 : -1)
+      .map(at => `
+        <tr>
+          <td><strong>${at.os||'----'}</strong></td>
+          <td>${fmtDate(at.dataOrigem)}</td>
+          <td>${fmtDate(at.dataConc)}</td>
+          <td>${at.prefixo||'----'}</td>
+          <td>${at.causa||'----'}</td>
+        </tr>`).join('');
+
+    html += `
+      <div class="dropdown-item" id="item_${uid}">
+        <div class="dropdown-header" onclick="toggleDropdown('${uid}')">
+          <div class="dropdown-header-left">
+            <div class="dropdown-uc">UC ${h.uc}</div>
+            <div class="dropdown-meta">
+              ${h.qtdAtendimentos||1} atendimento(s) &nbsp;·&nbsp;
+              Última OS: <strong>${h.ultimaOS||'----'}</strong> &nbsp;·&nbsp;
+              Equipe: <strong>${h.prefixo||'----'}</strong>
+            </div>
+          </div>
+          <div class="dropdown-header-right">
+            <div class="dropdown-progress">
+              <div class="dropdown-progress-label">
+                <span style="font-size:0.72rem;color:var(--eq-gray-500)">Período de retrabalho</span>
+                <span style="font-size:0.72rem;font-weight:700;color:var(--eq-gray-700)">${pct}%</span>
+              </div>
+              <div class="dias-bar-outer" style="height:6px">
+                <div class="dias-bar-inner ${barCls}" style="width:${pct}%"></div>
+              </div>
+            </div>
+            <div class="dropdown-dias-badge ${diasCls}">
+              <span class="dropdown-dias-num">${dias}</span>
+              <span class="dropdown-dias-label">dias restantes</span>
+            </div>
+            <div class="dropdown-saida">
+              <span style="font-size:0.68rem;color:var(--eq-gray-400);display:block">Sai do retrabalho</span>
+              <span style="font-size:0.78rem;font-weight:700;color:${dias<=10?'var(--eq-red)':dias<=30?'var(--eq-amber-dark)':'var(--eq-green)'}">
+                ${fmtDateShort(h.fim90.toISOString())}
+              </span>
+            </div>
+            <span class="dropdown-chevron" id="icon_${uid}">▾</span>
+          </div>
+        </div>
+        <div class="dropdown-body" id="body_${uid}" style="display:none">
+          <div class="historico-table-wrap" style="margin:0;border-radius:0">
+            <table class="historico-table">
+              <thead><tr>
+                <th>OS</th><th>Data Início</th><th>Data Fim</th><th>Equipe</th><th>Causa</th>
+              </tr></thead>
+              <tbody>
+                ${atendRows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--eq-gray-400)">Sem registros detalhados</td></tr>'}
+              </tbody>
+            </table>
+          </div>
+          <div class="dropdown-footer">
+            <a href="pesquisa.html?uc=${encodeURIComponent(h.uc)}&from=alertas" class="dropdown-link">
+              Ver histórico completo e Gantt →
+            </a>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  historicoEl.querySelector('.dropdown-list').innerHTML = html;
+}
+
+let _criterioAtual = 'menor-tempo';
+let _filtroUC = '';
+
+function aplicarFiltroOrdem() {
+  let lista = [..._ucsSemAlerta];
+  if (_filtroUC.trim()) {
+    lista = lista.filter(h => h.uc.toLowerCase().includes(_filtroUC.trim().toLowerCase()));
+  }
+  if (_criterioAtual === 'maior-tempo') lista.sort((a,b) => diasRestantes(b.dataConc) - diasRestantes(a.dataConc));
+  if (_criterioAtual === 'menor-tempo') lista.sort((a,b) => diasRestantes(a.dataConc) - diasRestantes(b.dataConc));
+  if (_criterioAtual === 'mais-atend')  lista.sort((a,b) => (b.qtdAtendimentos||1) - (a.qtdAtendimentos||1));
+  const counter = document.getElementById('filtro-count');
+  if (counter) counter.textContent = lista.length + ' UC' + (lista.length !== 1 ? 's' : '');
+  renderDropdowns(lista);
+}
+
+function filtrarUC(valor) {
+  _filtroUC = valor;
+  const clearBtn = document.getElementById('filtro-clear');
+  if (clearBtn) clearBtn.style.display = valor ? 'flex' : 'none';
+  aplicarFiltroOrdem();
+}
+
+function limparFiltro() {
+  _filtroUC = '';
+  const input = document.getElementById('filtro-uc');
+  if (input) input.value = '';
+  const clearBtn = document.getElementById('filtro-clear');
+  if (clearBtn) clearBtn.style.display = 'none';
+  aplicarFiltroOrdem();
+}
+
+function ordenarLista(criterio) {
+  _criterioAtual = criterio;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('sort-btn--active'));
+  document.getElementById('sort-' + criterio)?.classList.add('sort-btn--active');
+  aplicarFiltroOrdem();
+}
+
 // ===== CARREGAR =====
 async function carregarAlertas() {
   const statsEl    = document.getElementById('stats-container');
@@ -53,48 +178,45 @@ async function carregarAlertas() {
   historicoEl.innerHTML = '';
 
   try {
-    // 1. Visão atual
     const snapAtual = await db.collection('visao_atual').get();
     const ocorrencias = [];
     snapAtual.forEach(doc => ocorrencias.push(doc.data()));
-
     const comRetrabalho = ocorrencias.filter(o => o.emHistorico);
+    const ucsComAlerta  = new Set(comRetrabalho.map(o => o.uc));
 
-    // UCs que já têm alerta ativo (para não duplicar na seção de baixo)
-    const ucsComAlerta = new Set(comRetrabalho.map(o => o.uc));
-
-    // 2. Base histórica — todas dentro dos 90 dias, EXCETO as com alerta ativo
     const snapHist = await db.collection('historico').get();
     const hoje = new Date();
-    const ucsSemAlerta = [];
+    _ucsSemAlerta = [];
 
     snapHist.forEach(doc => {
       const d = doc.data();
       if (!d.dataConc) return;
-      const fim90 = new Date(new Date(d.dataConc).getTime() + 91 * 86400000);
+      const fim90 = new Date(new Date(d.dataConc).getTime() + 91*86400000);
       if (fim90 > hoje && !ucsComAlerta.has(doc.id)) {
-        ucsSemAlerta.push({ uc: doc.id, ...d, fim90 });
+        _ucsSemAlerta.push({ uc: doc.id, ...d, fim90 });
       }
     });
-    ucsSemAlerta.sort((a, b) => a.fim90 - b.fim90);
+    // Ordenação padrão: menor tempo restante primeiro
+    _ucsSemAlerta.sort((a,b) => diasRestantes(a.dataConc) - diasRestantes(b.dataConc));
 
-    const total90 = ucsSemAlerta.length + comRetrabalho.length;
-
-    // ===== STATS =====
+    // ===== STATS — 4 cards =====
     statsEl.innerHTML = `
       <div class="alert-stats">
         <div class="stat-card danger">
           <div class="stat-value">${comRetrabalho.length}</div>
           <div class="stat-label">Ocorrências com Retrabalho</div>
         </div>
-        </div>
         <div class="stat-card info">
           <div class="stat-value">${ocorrencias.length}</div>
-          <div class="stat-label">Total Ativas</div>
+          <div class="stat-label">Total de Ocorrências Ativas</div>
+        </div>
+        <div class="stat-card warning">
+          <div class="stat-value">${_ucsSemAlerta.length}</div>
+          <div class="stat-label">UCs em Retrabalho sem Ocorrência Ativa</div>
         </div>
         <div class="stat-card success">
-          <div class="stat-value">${total90}</div>
-          <div class="stat-label">UCs no Período de 90 dias</div>
+          <div class="stat-value">${_ucsSemAlerta.length + comRetrabalho.length}</div>
+          <div class="stat-label">Total de UCs no Período de 90 dias</div>
         </div>
       </div>`;
 
@@ -133,110 +255,33 @@ async function carregarAlertas() {
       }
       alertasHTML += `</div>`;
     }
-
-
     alertasEl.innerHTML = alertasHTML;
 
-    // ===== HISTÓRICO 90 DIAS — DROPDOWNS =====
-    let histHTML = `
+    // ===== HISTÓRICO 90 DIAS — DROPDOWNS COM ORDENAÇÃO =====
+    historicoEl.innerHTML = `
       <div class="section-head" style="margin-top:48px">
-        <div class="section-count blue">${ucsSemAlerta.length}</div>
+        <div class="section-count blue">${_ucsSemAlerta.length}</div>
         <h2>📅 UCs em Retrabalho sem Ocorrência Ativa</h2>
       </div>
-      <p style="font-size:0.83rem;color:var(--eq-gray-600);margin-bottom:16px">
-        Clique em cada UC para expandir o histórico de atendimentos e ver quando sairá do retrabalho.
-      </p>`;
 
-    if (!ucsSemAlerta.length) {
-      histHTML += `<div class="no-results" style="padding:32px 0"><p>Nenhuma UC em retrabalho sem ocorrência ativa no momento.</p></div>`;
-    } else {
-      histHTML += `<div class="dropdown-list">`;
+      <div class="historico-toolbar">
+        <div class="filtro-uc-wrap">
+          <svg class="filtro-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><line x1="11" y1="11" x2="15" y2="15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <input id="filtro-uc" type="text" class="filtro-uc-input" placeholder="Buscar UC..." oninput="filtrarUC(this.value)" autocomplete="off"/>
+          <button class="filtro-clear" id="filtro-clear" onclick="limparFiltro()" style="display:none" title="Limpar">✕</button>
+          <span class="filtro-count" id="filtro-count"></span>
+        </div>
+        <div class="sort-group">
+          <span class="sort-label">Ordenar:</span>
+          <button id="sort-menor-tempo" class="sort-btn sort-btn--active" onclick="ordenarLista('menor-tempo')">⏱ Menor tempo</button>
+          <button id="sort-maior-tempo" class="sort-btn" onclick="ordenarLista('maior-tempo')">📅 Maior tempo</button>
+          <button id="sort-mais-atend" class="sort-btn" onclick="ordenarLista('mais-atend')">🔁 Mais atendimentos</button>
+        </div>
+      </div>
 
-      for (const h of ucsSemAlerta) {
-        const pct   = calcPct90(h.dataConc);
-        const dias  = diasRestantes(h.dataConc);
-        const barCls= pct >= 80 ? 'danger' : pct >= 50 ? 'warning' : 'safe';
-        const diasCls = dias <= 10 ? 'dias-critico' : dias <= 30 ? 'dias-alerta' : 'dias-ok';
-        const uid   = h.uc.replace(/\W/g, '_');
+      <div class="dropdown-list"></div>`;
 
-        // Linhas do histórico de atendimentos
-        const atendRows = (h.historico || [])
-          .sort((a,b) => (b.dataOrigem||'') > (a.dataOrigem||'') ? 1 : -1)
-          .map(at => `
-            <tr>
-              <td><strong>${at.os||'----'}</strong></td>
-              <td>${fmtDate(at.dataOrigem)}</td>
-              <td>${fmtDate(at.dataConc)}</td>
-              <td>${at.prefixo||'----'}</td>
-              <td>${at.causa||'----'}</td>
-            </tr>`).join('');
-
-        histHTML += `
-          <div class="dropdown-item" id="item_${uid}">
-
-            <!-- CABEÇALHO CLICÁVEL -->
-            <div class="dropdown-header" onclick="toggleDropdown('${uid}')">
-
-              <div class="dropdown-header-left">
-                <div class="dropdown-uc">UC ${h.uc}</div>
-                <div class="dropdown-meta">
-                  ${h.qtdAtendimentos||1} atendimento(s) &nbsp;·&nbsp;
-                  Última OS: <strong>${h.ultimaOS||'----'}</strong> &nbsp;·&nbsp;
-                  Equipe: <strong>${h.prefixo||'----'}</strong>
-                </div>
-              </div>
-
-              <div class="dropdown-header-right">
-                <!-- Barra de progresso 90 dias -->
-                <div class="dropdown-progress">
-                  <div class="dropdown-progress-label">
-                    <span style="font-size:0.72rem;color:var(--eq-gray-500)">Período de retrabalho</span>
-                    <span style="font-size:0.72rem;font-weight:700;color:var(--eq-gray-700)">${pct}%</span>
-                  </div>
-                  <div class="dias-bar-outer" style="height:6px">
-                    <div class="dias-bar-inner ${barCls}" style="width:${pct}%"></div>
-                  </div>
-                </div>
-                <!-- Contador de dias -->
-                <div class="dropdown-dias-badge ${diasCls}">
-                  <span class="dropdown-dias-num">${dias}</span>
-                  <span class="dropdown-dias-label">dias restantes</span>
-                </div>
-                <!-- Data de saída -->
-                <div class="dropdown-saida">
-                  <span style="font-size:0.68rem;color:var(--eq-gray-400);display:block">Sai do retrabalho</span>
-                  <span style="font-size:0.78rem;font-weight:700;color:${dias<=10?'var(--eq-red)':dias<=30?'var(--eq-amber-dark)':'var(--eq-green)'}">${fmtDateShort(h.fim90.toISOString())}</span>
-                </div>
-                <span class="dropdown-chevron" id="icon_${uid}">▾</span>
-              </div>
-            </div>
-
-            <!-- CORPO EXPANSÍVEL -->
-            <div class="dropdown-body" id="body_${uid}" style="display:none">
-              <div class="historico-table-wrap" style="margin:0;border-radius:0">
-                <table class="historico-table">
-                  <thead><tr>
-                    <th>OS</th><th>Data Início</th><th>Data Fim</th><th>Equipe</th><th>Causa</th>
-                  </tr></thead>
-                  <tbody>
-                    ${atendRows || '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--eq-gray-400)">Sem registros detalhados</td></tr>'}
-                  </tbody>
-                </table>
-              </div>
-              <div class="dropdown-footer">
-                <a href="pesquisa.html?uc=${encodeURIComponent(h.uc)}&from=alertas" class="dropdown-link">
-                  Ver histórico completo e Gantt →
-                </a>
-              </div>
-            </div>
-
-          </div>`;
-      }
-
-      histHTML += `</div>`;
-    }
-
-    historicoEl.innerHTML = histHTML;
+    aplicarFiltroOrdem();
 
   } catch(err) {
     console.error(err);
