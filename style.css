@@ -403,6 +403,197 @@ body {
 }
 .info-value.highlight { color: var(--eq-blue); font-size: 1.2rem; }
 
+/* ===== GANTT — Linha do tempo ===== */
+.gantt-section {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 28px; margin-bottom: 24px;
+}
+.gantt-title {
+  font-family: var(--font-display);
+  font-size: 1rem; font-weight: 700;
+  color: var(--eq-gray-900); margin-bottom: 32px;
+  display: flex; align-items: center; gap: 8px;
+}
+.gantt-title::before {
+  content: '';
+  display: inline-block; width: 4px; height: 18px;
+  background: var(--eq-amber); border-radius: 2px;
+}
+.gantt-container { overflow-x: auto; padding-bottom: 4px; }
+
+/* Linha do tempo */
+.tl-chart {
+  position: relative;
+  min-width: 500px;
+  height: 110px; /* espaço para labels acima e abaixo */
+  margin: 0 24px;
+}
+
+/* Linha central horizontal */
+.tl-line {
+  position: absolute;
+  top: 50%; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--eq-gray-200), var(--eq-gray-300), var(--eq-gray-200));
+  border-radius: 2px;
+  transform: translateY(-50%);
+}
+
+/* Wrapper de cada marcador — posicionado horizontalmente */
+.tl-marker-wrap {
+  position: absolute;
+  top: 0; bottom: 0;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+/* Ponto / bolinha do marcador */
+.tl-dot {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  border: 3px solid;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  background: var(--white);
+  transition: transform .2s, box-shadow .2s;
+  position: relative;
+  z-index: 2;
+  flex-shrink: 0;
+}
+.tl-dot:hover {
+  transform: scale(1.25);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.18);
+  z-index: 50;
+}
+.tl-dot-num {
+  font-family: var(--font-display);
+  font-size: 0.72rem; font-weight: 800;
+  line-height: 1;
+}
+
+/* Labels acima e abaixo */
+.tl-label {
+  text-align: center;
+  max-width: 90px;
+}
+.tl-label--above {
+  margin-bottom: 6px;
+  order: -1;
+}
+.tl-label--below {
+  margin-top: 6px;
+}
+.tl-label-os {
+  font-size: 0.65rem; font-weight: 700;
+  color: var(--eq-gray-700);
+  white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; max-width: 88px;
+}
+.tl-label-date {
+  font-size: 0.62rem; color: var(--eq-gray-400);
+  white-space: nowrap;
+}
+
+/* Tooltip ao hover */
+.tl-tooltip {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--eq-gray-900);
+  color: var(--white);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  min-width: 240px;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 200;
+  box-shadow: var(--shadow-lg);
+  transition: opacity .15s;
+}
+.tl-tooltip::after {
+  content: '';
+  position: absolute; top: 100%; left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--eq-gray-900);
+}
+.tl-dot:hover .tl-tooltip { opacity: 1; }
+
+.tl-tooltip-num {
+  font-size: 0.68rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.5px; color: var(--eq-gray-400); margin-bottom: 4px;
+}
+.tl-tooltip-os {
+  font-weight: 700; font-size: 0.82rem;
+  color: var(--eq-amber); margin-bottom: 6px;
+}
+.tl-tooltip-row { color: rgba(255,255,255,0.8); font-size: 0.73rem; }
+
+/* Eixo de datas */
+.gantt-axis {
+  display: flex;
+  padding-top: 6px;
+  border-top: 1px solid var(--eq-gray-200);
+  margin: 0 24px;
+}
+.gantt-tick {
+  flex: 1; font-size: 0.68rem; color: var(--eq-gray-400);
+  text-align: center;
+}
+
+/* ===== RESULT CARD ===== */
+.result-card {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+  padding: 28px;
+  margin-bottom: 24px;
+  border-left: 5px solid var(--eq-blue);
+}
+.result-header {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 12px; margin-bottom: 20px;
+}
+.result-uc {
+  font-family: var(--font-display);
+  font-size: 1.4rem; font-weight: 800; color: var(--eq-blue-dark);
+}
+.badge-retrabalho {
+  background: var(--eq-red); color: var(--white);
+  padding: 5px 14px; border-radius: 20px;
+  font-size: 0.78rem; font-weight: 700; letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.badge-ok {
+  background: var(--eq-green); color: var(--white);
+  padding: 5px 14px; border-radius: 20px;
+  font-size: 0.78rem; font-weight: 700;
+}
+
+.info-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 16px; margin-bottom: 24px;
+}
+.info-item { }
+.info-label {
+  font-size: 0.7rem; font-weight: 700; letter-spacing: 0.8px;
+  text-transform: uppercase; color: var(--eq-gray-400); margin-bottom: 4px;
+}
+.info-value {
+  font-size: 0.95rem; font-weight: 600; color: var(--eq-gray-900);
+}
+.info-value.highlight { color: var(--eq-blue); font-size: 1.2rem; }
+
 /* ===== GANTT ===== */
 .gantt-section {
   background: var(--white);
@@ -435,41 +626,43 @@ body {
   font-size: 0.78rem; font-weight: 600; color: var(--eq-gray-700);
   text-align: right;
 }
-.gantt-track { flex: 1; height: 36px; position: relative; background: var(--eq-gray-100); border-radius: 6px; overflow: visible; }
-.gantt-track { position: relative; }
+.gantt-track { flex: 1; height: 28px; position: relative; background: var(--eq-gray-100); border-radius: 6px; overflow: visible; }
 
 .gantt-bar {
   position: absolute;
   top: 4px; bottom: 4px;
   border-radius: 4px;
-  min-width: 8px;
+  min-width: 10px;
   cursor: pointer;
   transition: filter .2s, transform .2s;
   z-index: 1;
+  overflow: visible;
 }
-.gantt-bar:hover { filter: brightness(1.12); transform: scaleY(1.15); z-index: 10; }
+.gantt-bar:hover { filter: brightness(1.1); z-index: 50; }
 .gantt-bar.retrabalho { background: linear-gradient(90deg, var(--eq-red), #E53935); }
 .gantt-bar.normal     { background: linear-gradient(90deg, var(--eq-blue), var(--eq-blue-mid)); }
+.gantt-bar:hover .gantt-tooltip { opacity: 1; }
 
 /* Tooltip flutuante acima da barra */
 .gantt-tooltip {
   position: absolute;
-  bottom: calc(100% + 2px);
+  bottom: calc(100% + 6px);
+  left: 50%;
   transform: translateX(-50%);
   background: var(--eq-gray-900);
   color: var(--white);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
-  min-width: 220px;
-  max-width: 320px;
+  min-width: 240px;
+  max-width: 340px;
   font-size: 0.75rem;
-  line-height: 1.5;
+  line-height: 1.6;
   white-space: nowrap;
   pointer-events: none;
   opacity: 0;
-  z-index: 100;
+  z-index: 200;
   box-shadow: var(--shadow-lg);
-  transition: opacity .15s;
+  transition: opacity .18s;
 }
 .gantt-tooltip::after {
   content: '';
@@ -478,8 +671,7 @@ body {
   border: 5px solid transparent;
   border-top-color: var(--eq-gray-900);
 }
-.gantt-track:hover .gantt-tooltip,
-.gantt-bar:hover + .gantt-tooltip { opacity: 1; }
+.gantt-bar:hover .gantt-tooltip { opacity: 1; }
 
 .gantt-tooltip-os {
   font-weight: 700; font-size: 0.8rem;
@@ -549,9 +741,12 @@ body {
 }
 .section-count {
   background: var(--eq-red); color: var(--white);
-  width: 26px; height: 26px; border-radius: 50%;
+  min-width: 30px; height: 30px; border-radius: 15px;
+  padding: 0 8px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 0.75rem; font-weight: 700;
+  font-size: 0.78rem; font-weight: 800;
+  letter-spacing: -0.3px;
+  flex-shrink: 0;
 }
 .section-count.blue { background: var(--eq-blue); }
 

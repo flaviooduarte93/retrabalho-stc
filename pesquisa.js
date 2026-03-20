@@ -13,7 +13,7 @@ function calcRetrabalho(dataConc) {
   return new Date() <= new Date(new Date(dataConc).getTime() + 91 * 86400000);
 }
 
-// ===== GANTT =====
+// ===== GANTT — Linha do tempo com marcadores =====
 function renderGantt(historico) {
   if (!historico || !historico.length) return '';
   const sorted = [...historico].filter(h => h.dataOrigem)
@@ -21,49 +21,82 @@ function renderGantt(historico) {
   if (!sorted.length) return '';
 
   const minDate = new Date(sorted[0].dataOrigem);
-  const maxDate = new Date(sorted[sorted.length-1].dataConc || sorted[sorted.length-1].dataOrigem);
-  maxDate.setDate(maxDate.getDate() + 5);
+  const maxDate = new Date(sorted[sorted.length-1].dataOrigem);
+
+  // Adiciona margem de 7 dias em cada lado para os marcadores não ficarem cortados
+  minDate.setDate(minDate.getDate() - 7);
+  maxDate.setDate(maxDate.getDate() + 7);
   const totalMs = maxDate - minDate || 1;
 
+  // Ticks do eixo — 6 datas distribuídas
   const ticks = [];
   for (let i = 0; i <= 5; i++) {
     ticks.push(new Date(minDate.getTime() + totalMs * i / 5)
-      .toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit'}));
+      .toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}));
   }
 
-  const bars = sorted.map((h, i) => {
-    const start = new Date(h.dataOrigem);
-    const end   = h.dataConc ? new Date(h.dataConc) : new Date(start.getTime() + 4*3600000);
-    const left  = ((start - minDate) / totalMs * 100).toFixed(2);
-    const width = Math.max(((end - start) / totalMs * 100), 0.4).toFixed(2);
-    const isRet = calcRetrabalho(h.dataConc);
-    const cls   = (i < sorted.length - 1 && isRet) ? 'retrabalho' : 'normal';
+  // Marcadores
+  const markers = sorted.map((h, i) => {
+    const pos     = ((new Date(h.dataOrigem) - minDate) / totalMs * 100).toFixed(2);
+    const isRet   = calcRetrabalho(h.dataConc);
+    const isLast  = i === sorted.length - 1;
+    const color   = isLast ? 'var(--eq-blue)' : (isRet ? 'var(--eq-red)' : 'var(--eq-blue)');
+    const causaTip = (h.causa||'----').substring(0,45) + ((h.causa||'').length>45?'…':'');
+    const num     = i + 1;
+
+    // Alterna label acima/abaixo para evitar sobreposição
+    const labelPos = (i % 2 === 0) ? 'above' : 'below';
+
     return `
-      <div class="gantt-row">
-        <div class="gantt-label">${fmtDateShort(h.dataOrigem)}</div>
-        <div class="gantt-track">
-          <div class="gantt-bar ${cls}" style="left:${left}%;width:${width}%"
-               title="OS ${h.os||'----'} · ${h.causa||'----'}\nInício: ${fmtDate(h.dataOrigem)}\nFim: ${fmtDate(h.dataConc)}">
-            ${h.os||''}
+      <div class="tl-marker-wrap" style="left:${pos}%">
+        ${labelPos === 'above' ? `
+        <div class="tl-label tl-label--above">
+          <div class="tl-label-os">${h.os||'----'}</div>
+          <div class="tl-label-date">${fmtDateShort(h.dataOrigem)}</div>
+        </div>` : ''}
+        <div class="tl-dot" style="background:${color};border-color:${color}" data-idx="${num}">
+          <span class="tl-dot-num">${num}</span>
+          <div class="tl-tooltip">
+            <div class="tl-tooltip-num">Atendimento ${num}</div>
+            <div class="tl-tooltip-os">${h.os||'----'}</div>
+            <div class="tl-tooltip-row">📋 ${causaTip}</div>
+            <div class="tl-tooltip-row">▶ ${fmtDate(h.dataOrigem)}</div>
+            <div class="tl-tooltip-row">■ ${fmtDate(h.dataConc)}</div>
           </div>
         </div>
+        ${labelPos === 'below' ? `
+        <div class="tl-label tl-label--below">
+          <div class="tl-label-os">${h.os||'----'}</div>
+          <div class="tl-label-date">${fmtDateShort(h.dataOrigem)}</div>
+        </div>` : ''}
       </div>`;
   }).join('');
+
+  const ticksHtml = ticks.map(t => `<div class="gantt-tick">${t}</div>`).join('');
 
   return `
     <div class="gantt-section">
       <div class="gantt-title">Linha do Tempo de Atendimentos</div>
-      <div class="gantt-container"><div class="gantt-chart">
-        ${bars}
-        <div class="gantt-axis">${ticks.map(t=>`<div class="gantt-tick">${t}</div>`).join('')}</div>
-      </div></div>
-      <div style="margin-top:14px;display:flex;gap:16px;font-size:0.75rem;color:var(--eq-gray-600)">
+      <div class="gantt-container">
+        <div class="tl-chart">
+          <!-- Linha central -->
+          <div class="tl-line"></div>
+          <!-- Marcadores -->
+          ${markers}
+        </div>
+        <!-- Eixo de datas -->
+        <div class="gantt-axis" style="margin-top:8px">${ticksHtml}</div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:20px;font-size:0.75rem;color:var(--eq-gray-600);flex-wrap:wrap">
         <span style="display:flex;align-items:center;gap:6px">
-          <span style="width:12px;height:12px;border-radius:3px;background:var(--eq-blue);display:inline-block"></span>Atendimento normal
+          <span style="width:12px;height:12px;border-radius:50%;background:var(--eq-blue);display:inline-block"></span>
+          Atendimento
         </span>
         <span style="display:flex;align-items:center;gap:6px">
-          <span style="width:12px;height:12px;border-radius:3px;background:var(--eq-red);display:inline-block"></span>Em período de retrabalho
+          <span style="width:12px;height:12px;border-radius:50%;background:var(--eq-red);display:inline-block"></span>
+          Em período de retrabalho
         </span>
+        <span style="font-size:0.72rem;color:var(--eq-gray-400)">Passe o mouse sobre cada marcador para ver os detalhes</span>
       </div>
     </div>`;
 }

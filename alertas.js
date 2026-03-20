@@ -227,6 +227,17 @@ async function carregarAlertas() {
         <h2>⚠ Ocorrências em UCs com Retrabalho</h2>
       </div>`;
 
+    // Ordem: T-TRABALHANDO → A-EM DESLOCAMENTO → B-ATRIB. MULTIPLA → E-PREPARAÇÃO → resto
+    const ordemEstado = (estado) => {
+      const e = (estado||'').toUpperCase();
+      if (e.startsWith('T-') || e.includes('TRABALHANDO'))    return 0;
+      if (e.startsWith('A-') || e.includes('DESLOCAMENTO'))   return 1;
+      if (e.startsWith('B-') || e.includes('MULTIPLA'))       return 2;
+      if (e.startsWith('E-') || e.includes('PREPARA'))        return 3;
+      return 4;
+    };
+    comRetrabalho.sort((a, b) => ordemEstado(a.estado) - ordemEstado(b.estado));
+
     if (!comRetrabalho.length) {
       alertasHTML += `<div class="no-results" style="padding:32px 0"><p>Nenhuma ocorrência ativa em UC com retrabalho.</p></div>`;
     } else {
