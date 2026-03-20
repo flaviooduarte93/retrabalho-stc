@@ -101,51 +101,57 @@ async function processHistorico(file) {
       const registros = byUC[uc];
 
       // ----------------------------------------------------------------
-      // PASSO 1: Monta mapa de atendimentos com desduplicação encadeada
+      // MAPEAMENTO DA CADEIA DE ATENDIMENTOS
       //
-      // Para cada OS que aparece como OS_ORIGEM em alguma linha,
-      // usamos os dados DESSA linha (colunas DATA_ORIGEM_1º ATEND. etc.)
-      // porque elas representam com precisão as datas daquele atendimento.
+      // Cada linha representa: OS_ORIGEM → OS  (OS_ORIGEM gerou o retrabalho OS)
       //
-      // Para o último OS (nunca aparece como OS_ORIGEM), usamos as colunas
-      // DATA_ORIGEM / OCO_DATA_CONCLUSAO / PREFIXO da própria linha.
+      // Para cada OS, os dados corretos são:
+      //   - OS_ORIGEM: usa DATA_ORIGEM_1º ATEND. / DATA_CONCLUSAO_1º ATEND. /
+      //                PREFIXO_ORIGEM / TIPO_CONCLUSAO_ORIGEM da MESMA linha
+      //   - OS (último da cadeia, nunca vira OS_ORIGEM): usa DATA_ORIGEM /
+      //                OCO_DATA_CONCLUSAO / PREFIXO / TIPO_CONCLUSAO_ORIGEM da mesma linha
+      //
+      // Exemplo: 88114 → 112 → 124546
+      //   Linha 1: OS_ORIGEM=88114 → causa/datas do 88114 em DATA_ORIGEM_1º etc.
+      //   Linha 2: OS_ORIGEM=112   → causa/datas do 112 em DATA_ORIGEM_1º etc.
+      //            OS=124546       → causa/datas do 124546 em DATA_ORIGEM etc.
       // ----------------------------------------------------------------
 
-      // Conjunto de todas as OS que aparecem como OS_ORIGEM (atendimentos intermediários/primeiros)
-      const osQueEhOrigem = new Set(registros.map(r => String(r['OS_ORIGEM'] || '').trim()).filter(Boolean));
+      // Conjunto de OS que aparecem como OS_ORIGEM (não são o último da cadeia)
+      const osQueEhOrigem = new Set(
+        registros.map(r => String(r['OS_ORIGEM'] || '').trim()).filter(Boolean)
+      );
 
-      const osMap = {}; // chave: número da OS, valor: dados do atendimento
+      const osMap = {};
 
       for (const r of registros) {
         const osAtual  = String(r['OS'] || '').trim();
         const osOrigem = String(r['OS_ORIGEM'] || '').trim();
 
-        // --- Registra o OS_ORIGEM (1º ou intermediário) ---
-        // Sempre sobrescreve com dados desta linha, pois as colunas
-        // DATA_ORIGEM_1º ATEND. / DATA_CONCLUSAO_1º ATEND. são as mais precisas
-        // para este atendimento.
+        // OS_ORIGEM desta linha: usa colunas 1º ATEND. e PREFIXO_ORIGEM
+        // TIPO_CONCLUSAO_ORIGEM desta linha = causa do OS_ORIGEM
         if (osOrigem) {
           osMap[osOrigem] = {
-            os:        osOrigem,
+            os:         osOrigem,
             dataOrigem: parseDate(r['DATA_ORIGEM_1º ATEND.'])?.toISOString() || null,
             dataConc:   parseDate(r['DATA_CONCLUSAO_1º ATEND.'])?.toISOString() || null,
-            prefixo:   String(r['PREFIXO_ORIGEM'] || '') || '----',
-            causa:     String(r['TIPO_CONCLUSAO_ORIGEM'] || '') || '----',
+            prefixo:    String(r['PREFIXO_ORIGEM'] || '') || '----',
+            causa:      String(r['TIPO_CONCLUSAO_ORIGEM'] || '') || '----',
           };
         }
 
-        // --- Registra o OS atual (último ou intermediário) ---
-        // Só registra se esta OS NÃO aparece como OS_ORIGEM em nenhuma outra linha
-        // (ou seja, é o atendimento mais recente / final da cadeia)
-        // Se ela APARECE como origem em outra linha, os dados dela já foram/serão
-        // preenchidos acima com mais precisão.
+        // OS atual = último da cadeia (nunca aparece como OS_ORIGEM em outra linha)
+        // Usa DATA_ORIGEM / OCO_DATA_CONCLUSAO / PREFIXO
+        // Causa: coluna TIPO_CONCLUSAO (própria causa do último atendimento).
+        // Fallback para TIPO_CONCLUSAO_ORIGEM caso a coluna não exista na base.
         if (osAtual && !osQueEhOrigem.has(osAtual)) {
+          const causaFinal = String(r['TIPO_CONCLUSAO'] || r['TIPO_CONCLUSAO_ORIGEM'] || '') || '----';
           osMap[osAtual] = {
-            os:        osAtual,
+            os:         osAtual,
             dataOrigem: parseDate(r['DATA_ORIGEM'])?.toISOString() || null,
             dataConc:   parseDate(r['OCO_DATA_CONCLUSAO'])?.toISOString() || null,
-            prefixo:   String(r['PREFIXO'] || '') || '----',
-            causa:     String(r['TIPO_CONCLUSAO_ORIGEM'] || '') || '----',
+            prefixo:    String(r['PREFIXO'] || '') || '----',
+            causa:      causaFinal,
           };
         }
       }
