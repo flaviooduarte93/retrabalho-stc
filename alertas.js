@@ -252,7 +252,7 @@ async function carregarAlertas() {
                 <a href="pesquisa.html?uc=${encodeURIComponent(o.uc)}&from=alertas"
                    style="color:var(--eq-blue-dark);text-decoration:none;font-weight:700">UC ${o.uc}</a>
               </div>
-              <div class="alert-detail">${o.pontoEletrico||o.uc} · Equipe: ${o.equipe||'----'} · ${fmtDate(o.dtInicio)}</div>
+              <div class="alert-detail">${o.pontoEletrico||o.uc}${(o.estado||'').toUpperCase().startsWith('E-') ? '' : ' · Equipe: ' + (o.equipe||'----')} · ${fmtDate(o.dtInicio)}</div>
               ${o.motivo ? `<div class="alert-detail" style="margin-top:2px">${o.motivo}</div>` : ''}
             </div>
             <div class="alert-badges">
