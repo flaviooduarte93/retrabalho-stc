@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Alertas de Campo — Equatorial Retrabalho</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap"/>
+  <link rel="stylesheet" href="css/style.css"/>
+</head>
+<body class="inner-page">
+
+  <nav class="topbar">
+    <div class="topbar-brand">
+      <span class="brand-title">eq<span>ua</span>torial</span>
+      <span class="topbar-badge">Retrabalho</span>
+    </div>
+    <a href="index.html" class="topbar-back">
+      ← Início
+    </a>
+  </nav>
+
+  <main class="page-main" id="app">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:4px">
+      <h1 class="page-title" style="margin-bottom:0">Alertas de Campo</h1>
+      <button class="search-btn" id="btn-refresh" style="padding:10px 20px;font-size:0.85rem">
+        ↻ Atualizar
+      </button>
+    </div>
+    <p class="page-subtitle">Ocorrências ativas que envolvem UCs em período de retrabalho (90 dias).</p>
+
+    <div id="stats-container"></div>
+    <div id="alertas-container"></div>
+    <div id="historico-container"></div>
+  </main>
+
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
+  <script src="js/firebase-init.js"></script>
+  <script src="js/alertas.js"></script>
+</body>
+</html>
