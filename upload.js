@@ -375,32 +375,17 @@ async function processAtual(file) {
     }
   }
 
-  // Grava recente + hist em paralelo
+
+
+  // Visão atual: apaga tudo e regrava (igual à base histórica)
+  // A coleção é pequena (só ocorrências abertas/CR) então é rápido
+  setStatus('status-atual', '⏳ Atualizando ocorrências ativas...', 'loading');
   await Promise.all([
+    deleteCollection('visao_atual'),
     gravarBatch('historico_recente', docsRecente, d => d.id),
     gravarHistUpdates(),
   ]);
-
-  // Substitui visao_atual:
-  // 1. Grava novos docs (rápido — set sobrescreve os existentes)
-  // 2. Apaga docs que não vieram neste upload (IDs não presentes no novo conjunto)
-  setStatus('status-atual', '⏳ Atualizando ocorrências ativas...', 'loading');
-
-  const idsNovos = new Set(docsAtivas.map(d => sanitizeId(d.ocorrencia)));
-
-  // Grava novos em paralelo com busca dos antigos
-  const [, snapVisaoAtual] = await Promise.all([
-    gravarBatch('visao_atual', docsAtivas, d => d.ocorrencia),
-    db.collection('visao_atual').get()
-  ]);
-
-  // Apaga apenas os que não estão no novo upload
-  const parasApagar = snapVisaoAtual.docs.filter(d => !idsNovos.has(d.id));
-  for (let i = 0; i < parasApagar.length; i += 400) {
-    const b = db.batch();
-    parasApagar.slice(i, i+400).forEach(d => b.delete(d.ref));
-    await b.commit();
-  }
+  await gravarBatch('visao_atual', docsAtivas, d => d.ocorrencia);
 
   // Remove meses expirados da janela (assíncrono, não bloqueia o feedback)
   (async () => {
