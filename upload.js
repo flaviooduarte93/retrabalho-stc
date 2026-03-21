@@ -200,211 +200,184 @@ async function processAtual(file) {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const allRows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
 
-  // Encontra linha de header (contém "Número")
   let headerIdx = -1;
   for (let i = 0; i < Math.min(5, allRows.length); i++) {
     if (allRows[i].some(c => String(c).trim() === 'Número')) { headerIdx = i; break; }
   }
   if (headerIdx === -1) {
-    setStatus('status-atual', '❌ Cabeçalho não encontrado. Verifique o arquivo.', 'error');
-    return;
+    setStatus('status-atual', '❌ Cabeçalho não encontrado.', 'error'); return;
   }
 
-  const headers  = allRows[headerIdx].map(h => String(h).trim());
-  const dataRows = allRows.slice(headerIdx + 1);
-
-  let rows = dataRows
+  const headers = allRows[headerIdx].map(h => String(h).trim());
+  let rows = allRows.slice(headerIdx + 1)
     .filter(r => r.some(c => c !== ''))
-    .map(r => {
-      const obj = {};
-      headers.forEach((h, i) => { obj[h] = r[i] !== undefined ? r[i] : ''; });
-      return obj;
-    });
-
-  // *** FILTRO: somente Abrangência == "CR" ***
-  rows = rows.filter(r => String(r['Abrangência'] || '').trim().toUpperCase() === 'CR');
+    .map(r => { const o={}; headers.forEach((h,i)=>{o[h]=r[i]??'';}); return o; })
+    .filter(r => String(r['Abrangência']||'').trim().toUpperCase() === 'CR');
 
   if (!rows.length) {
-    setStatus('status-atual', '❌ Nenhum registro com Abrangência "CR" encontrado.', 'error');
-    return;
+    setStatus('status-atual', '❌ Nenhum registro CR encontrado.', 'error'); return;
   }
 
-  setStatus('status-atual', `⏳ Processando ${rows.length} registros CR...`, 'loading');
+  setStatus('status-atual', `⏳ ${rows.length} registros CR — preparando...`, 'loading');
 
-  // Busca base histórica para merge
-  const historicoSnap = await db.collection('historico').get();
-  const historicoMap = {};
-  historicoSnap.forEach(doc => { historicoMap[doc.id] = doc.data(); });
-
-  // Identifica o mês atual para gravar no historico_recente
+  // Mês atual e janela válida
   const hoje = new Date();
   const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-
-  // Meses válidos da janela deslizante
   const mesesValidos = new Set([mesAtual]);
   for (let i = 1; i <= 3; i++) {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
+    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
     mesesValidos.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
   }
 
-  setStatus('status-atual', '⏳ Limpando bases anteriores...', 'loading');
+  // Extrai as UCs únicas presentes no arquivo (só buscamos essas no Firestore)
+  const ucsNoArquivo = new Set();
+  for (const row of rows) {
+    const pe = String(row['Ponto Elétrico']||'').trim();
+    const m  = pe.match(/^(.+?)\s+-\s/);
+    ucsNoArquivo.add(m ? m[1].trim() : pe.split(' -')[0].trim());
+  }
+  const ucsArr = [...ucsNoArquivo];
 
-  // Executa limpezas em paralelo: mês atual do recente + visao_atual + meses expirados
-  const snapMeta = await db.collection('historico_recente_meta').get();
-  const mesesExpirados = snapMeta.docs.map(d => d.id).filter(id => !mesesValidos.has(id));
+  setStatus('status-atual', '⏳ Consultando bases em paralelo...', 'loading');
 
-  // Função auxiliar: deleta todos os docs de um mês do historico_recente
+  // Busca histórico SOMENTE das UCs do arquivo (em lotes de 30 — limite do Firestore "in")
+  const historicoMap = {};
+  const chunks30 = [];
+  for (let i = 0; i < ucsArr.length; i += 30) chunks30.push(ucsArr.slice(i, i+30));
+  await Promise.all(chunks30.map(async chunk => {
+    const snap = await db.collection('historico').where('__name__', 'in', chunk).get();
+    snap.forEach(doc => { historicoMap[doc.id] = doc.data(); });
+  }));
+
+  // Limpezas em paralelo enquanto já temos os dados necessários
   async function deletarMesRecente(mesAno) {
     let snap = await db.collection('historico_recente').where('mesAno','==',mesAno).limit(500).get();
     while (snap.size > 0) {
-      const batches = [];
-      const chunks = [];
-      for (let i = 0; i < snap.docs.length; i += 400) chunks.push(snap.docs.slice(i, i+400));
-      for (const chunk of chunks) {
+      const ps = [];
+      for (let i = 0; i < snap.docs.length; i += 400) {
         const b = db.batch();
-        chunk.forEach(d => b.delete(d.ref));
-        batches.push(b.commit());
+        snap.docs.slice(i,i+400).forEach(d => b.delete(d.ref));
+        ps.push(b.commit());
       }
-      await Promise.all(batches);
+      await Promise.all(ps);
       snap = await db.collection('historico_recente').where('mesAno','==',mesAno).limit(500).get();
     }
   }
 
-  // Roda limpezas em paralelo
+  const snapMeta = await db.collection('historico_recente_meta').get();
+  const mesesExpirados = snapMeta.docs.map(d=>d.id).filter(id=>!mesesValidos.has(id));
+
+  setStatus('status-atual', '⏳ Limpando dados anteriores...', 'loading');
   await Promise.all([
-    deletarMesRecente(mesAtual),           // reescreve mês atual
-    deleteCollection('visao_atual'),        // limpa ocorrências ativas
-    ...mesesExpirados.map(async mes => {    // remove meses fora da janela
+    deletarMesRecente(mesAtual),
+    deleteCollection('visao_atual'),
+    ...mesesExpirados.map(async mes => {
       await deletarMesRecente(mes);
       await db.collection('historico_recente_meta').doc(mes).delete();
     })
   ]);
 
-  const BATCH_SIZE = 400;
-  let idx = 0;
-  let totalAtivas = 0, totalFinalizadas = 0;
-  const histUpdates = {}; // acumula updates do historico para aplicar no final
+  // Processa linhas — separa em dois grupos: ativas e finalizadas
+  const docsVisaoAtual = [];
+  const docsRecente    = [];
+  const histUpdates    = {};
 
-  while (idx < rows.length) {
-    const batch = db.batch();
-    const slice = rows.slice(idx, idx + BATCH_SIZE);
+  for (const row of rows) {
+    const ocorrencia = String(row['Número']||'').trim();
+    const estado     = String(row['Estado']||'').trim();
+    const pe         = String(row['Ponto Elétrico']||'').trim();
+    const equipe     = String(row['Equipe']||'').trim();
+    const dtInicio   = parseDate(row['Data Início']);
+    const dtFim      = parseDate(row['Data Fim']);
+    const seccional  = String(row['Seccional']||'').trim();
+    const municipio  = String(row['Município']||'').trim();
+    const motivo     = String(row['Motivo']||'').trim();
+    const causa      = String(row['Causa']||'').trim();
 
-    for (const row of slice) {
-      const ocorrencia    = String(row['Número'] || '').trim();
-      const estado        = String(row['Estado'] || '').trim();
-      const pontoEletrico = String(row['Ponto Elétrico'] || '').trim();
-      const equipe        = String(row['Equipe'] || '').trim();
-      const dtInicio      = parseDate(row['Data Início']);
-      const dtFim         = parseDate(row['Data Fim']);
-      const seccional     = String(row['Seccional'] || '').trim();
-      const municipio     = String(row['Município'] || '').trim();
-      const motivo        = String(row['Motivo'] || '').trim();
-      const causa         = String(row['Causa'] || '').trim();
+    const m  = pe.match(/^(.+?)\s+-\s/);
+    const uc = m ? m[1].trim() : pe.split(' -')[0].trim();
 
-      // Extrai UC: tudo antes do " - "
-      const ucMatch = pontoEletrico.match(/^(.+?)\s+-\s/);
-      const uc = ucMatch ? ucMatch[1].trim() : pontoEletrico.split(' -')[0].trim();
+    const causaFinal  = causa || motivo;
+    const procedente  = isProcedente(causaFinal);
+    const finalizado  = estado.toUpperCase().includes('FINALIZADA');
+    const emHistorico = !!historicoMap[uc];
 
-      const emHistorico  = !!historicoMap[uc];
-      const causaFinal   = causa || motivo;
-      const procedente   = isProcedente(causaFinal);
-      const finalizado   = estado.toUpperCase().includes('FINALIZADA');
+    const docBase = {
+      ocorrencia, estado, pontoEletrico: pe, uc,
+      equipe:   equipe  ||'----',
+      dtInicio: dtInicio ? dtInicio.toISOString() : null,
+      dtFim:    dtFim    ? dtFim.toISOString()    : null,
+      causa: causaFinal, seccional, municipio,
+      mesAno: mesAtual, procedente
+    };
 
-      // ── F-FINALIZADA: entra no historico_recente (mês atual) + atualiza base histórica ──
-      if (finalizado) {
-        totalFinalizadas++;
+    if (finalizado) {
+      docsRecente.push({ id:`${mesAtual}_${ocorrencia}`, ...docBase, finalizado:true, ativo:false });
 
-        // Grava no historico_recente como registro do mês atual
-        // (substitui meses fechados conforme a janela anda)
-        if (ocorrencia) {
-          const recRef = db.collection('historico_recente').doc(`${mesAtual}_${ocorrencia}`);
-          batch.set(recRef, {
-            ocorrencia, estado, pontoEletrico, uc,
-            equipe:    equipe    || '----',
-            dtInicio:  dtInicio  ? dtInicio.toISOString()  : null,
-            dtFim:     dtFim     ? dtFim.toISOString()     : null,
-            causa: causaFinal, seccional, municipio,
-            mesAno: mesAtual, finalizado: true, ativo: false, procedente
-          });
+      if (emHistorico && dtInicio) {
+        const dtOrigHist = historicoMap[uc].dataOrigem ? new Date(historicoMap[uc].dataOrigem) : null;
+        if (!dtOrigHist || dtInicio >= dtOrigHist) {
+          histUpdates[uc] = {
+            ultimaOS: ocorrencia,
+            dataOrigem: dtInicio.toISOString(),
+            dataConc:   dtFim ? dtFim.toISOString() : null,
+            prefixo:    equipe||'----',
+            causa:      causaFinal||'----',
+          };
+          historicoMap[uc] = { ...historicoMap[uc], dataOrigem: dtInicio.toISOString() };
         }
-
-        // Coleta atualizações do histórico para aplicar em batch depois
-        if (emHistorico && dtInicio) {
-          const dtOrigHist = historicoMap[uc].dataOrigem
-            ? new Date(historicoMap[uc].dataOrigem) : null;
-          if (!dtOrigHist || dtInicio >= dtOrigHist) {
-            histUpdates[uc] = {
-              ultimaOS:   ocorrencia,
-              dataOrigem: dtInicio ? dtInicio.toISOString() : null,
-              dataConc:   dtFim    ? dtFim.toISOString()    : null,
-              prefixo:    equipe   || '----',
-              causa:      causaFinal || '----',
-            };
-            // Atualiza o map local para que ocorrências posteriores da mesma UC
-            // não sobrescrevam com dados mais antigos
-            historicoMap[uc] = { ...historicoMap[uc], dataOrigem: dtInicio.toISOString() };
-          }
-        }
-        continue;
       }
-
-      // ── OCORRÊNCIAS ATIVAS: entram na visao_atual ──
-      if (!ocorrencia) continue;
-      totalAtivas++;
-
-      // Também grava ocorrências ativas no historico_recente do mês atual
-      // para análise de possível retrabalho em tempo real
-      const recRefAtiva = db.collection('historico_recente').doc(`${mesAtual}_${ocorrencia}`);
-      batch.set(recRefAtiva, {
-        ocorrencia, estado, pontoEletrico, uc,
-        equipe:   equipe   || '----',
-        dtInicio: dtInicio ? dtInicio.toISOString() : null,
-        dtFim:    dtFim    ? dtFim.toISOString()    : null,
-        causa: causaFinal, seccional, municipio,
-        mesAno: mesAtual, finalizado: false, ativo: true, procedente
-      });
-
-      batch.set(db.collection('visao_atual').doc(ocorrencia), {
-        ocorrencia, estado, pontoEletrico, uc,
-        equipe:          equipe   || '----',
-        dtInicio:        dtInicio ? dtInicio.toISOString() : null,
-        dtFim:           dtFim    ? dtFim.toISOString()    : null,
-        seccional, municipio, motivo, causa: causaFinal,
-        emHistorico,
-        qtdAtendimentos: emHistorico ? (historicoMap[uc].qtdAtendimentos || 1) : 0,
-        dataConc:        emHistorico ? (historicoMap[uc].dataConc || null)     : null,
-        causaHistorico:  emHistorico ? (historicoMap[uc].causa    || '----')   : '----',
+    } else if (ocorrencia) {
+      docsRecente.push({ id:`${mesAtual}_${ocorrencia}`, ...docBase, finalizado:false, ativo:true });
+      docsVisaoAtual.push({
+        ...docBase, emHistorico,
+        qtdAtendimentos: emHistorico ? (historicoMap[uc].qtdAtendimentos||1) : 0,
+        dataConc:        emHistorico ? (historicoMap[uc].dataConc||null)     : null,
+        causaHistorico:  emHistorico ? (historicoMap[uc].causa||'----')      : '----',
       });
     }
-
-    await batch.commit();
-    idx += BATCH_SIZE;
-    setStatus('status-atual', `⏳ Salvando... ${Math.min(idx, rows.length)}/${rows.length}`, 'loading');
   }
 
-  // Aplica atualizações da base histórica em batch (muito mais rápido que await por linha)
-  setStatus('status-atual', '⏳ Atualizando base histórica...', 'loading');
-  const histKeys = Object.keys(histUpdates);
-  for (let i = 0; i < histKeys.length; i += 400) {
-    const b = db.batch();
-    histKeys.slice(i, i+400).forEach(ucKey => {
-      b.update(db.collection('historico').doc(ucKey), histUpdates[ucKey]);
-    });
-    await b.commit();
+  setStatus('status-atual', `⏳ Salvando ${docsVisaoAtual.length} ativas + ${docsRecente.length} no recente...`, 'loading');
+
+  // Grava tudo em paralelo usando batches
+  async function gravarBatches(colecao, docs, idFn) {
+    for (let i = 0; i < docs.length; i += 400) {
+      const b = db.batch();
+      docs.slice(i,i+400).forEach(doc => {
+        const { id, ...d } = doc;
+        b.set(db.collection(colecao).doc(idFn ? idFn(doc) : id), d);
+      });
+      await b.commit();
+    }
   }
 
-  // Atualiza meta do mês atual no historico_recente
+  await Promise.all([
+    gravarBatches('historico_recente', docsRecente, d => d.id),
+    gravarBatches('visao_atual', docsVisaoAtual, d => d.ocorrencia),
+  ]);
+
+  // Aplica updates do histórico em batch
+  if (Object.keys(histUpdates).length) {
+    const entries = Object.entries(histUpdates);
+    for (let i = 0; i < entries.length; i += 400) {
+      const b = db.batch();
+      entries.slice(i,i+400).forEach(([uc, upd]) => b.update(db.collection('historico').doc(uc), upd));
+      await b.commit();
+    }
+  }
+
+  // Atualiza meta
   await db.collection('historico_recente_meta').doc(mesAtual).set({
-    mesAno:          mesAtual,
-    arquivo:         file.name,
-    totalRegistros:  rows.length,
-    totalAtivas,
-    totalFinalizadas,
-    atualizadoEm:    new Date().toISOString()
+    mesAno: mesAtual, arquivo: file.name,
+    totalRegistros: rows.length,
+    totalAtivas: docsVisaoAtual.length,
+    totalFinalizadas: docsRecente.length - docsVisaoAtual.length,
+    atualizadoEm: new Date().toISOString()
   });
 
   setStatus('status-atual',
-    `✅ ${totalAtivas} ocorrências ativas + ${totalFinalizadas} finalizadas processadas para ${mesAtual}!`,
+    `✅ ${docsVisaoAtual.length} ativas + ${docsRecente.length - docsVisaoAtual.length} finalizadas salvas!`,
     'success');
 }
 
