@@ -240,47 +240,50 @@ async function processAtual(file) {
   const hoje = new Date();
   const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
 
-  // Apaga mês atual do historico_recente (será reescrito com dados frescos)
-  setStatus('status-atual', '⏳ Atualizando janela do histórico recente...', 'loading');
-  const snapMesAtual = await db.collection('historico_recente')
-    .where('mesAno', '==', mesAtual).limit(500).get();
-  let toDelRec = snapMesAtual.docs.map(d => d.ref);
-  while (toDelRec.length) {
-    const b = db.batch();
-    toDelRec.splice(0, 400).forEach(ref => b.delete(ref));
-    await b.commit();
-    const nx = await db.collection('historico_recente')
-      .where('mesAno', '==', mesAtual).limit(500).get();
-    toDelRec = nx.docs.map(d => d.ref);
-  }
-
-  // Também limpa meses fora da janela de 3 meses fechados + atual
+  // Meses válidos da janela deslizante
   const mesesValidos = new Set([mesAtual]);
   for (let i = 1; i <= 3; i++) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
     mesesValidos.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
   }
+
+  setStatus('status-atual', '⏳ Limpando bases anteriores...', 'loading');
+
+  // Executa limpezas em paralelo: mês atual do recente + visao_atual + meses expirados
   const snapMeta = await db.collection('historico_recente_meta').get();
-  for (const doc of snapMeta.docs) {
-    if (!mesesValidos.has(doc.id)) {
-      // Deleta ocorrências desse mês expirado
-      let expSnap = await db.collection('historico_recente')
-        .where('mesAno', '==', doc.id).limit(500).get();
-      let expDocs = expSnap.docs.map(d => d.ref);
-      while (expDocs.length) {
-        const b = db.batch(); expDocs.splice(0,400).forEach(r=>b.delete(r)); await b.commit();
-        expSnap = await db.collection('historico_recente').where('mesAno','==',doc.id).limit(500).get();
-        expDocs = expSnap.docs.map(d=>d.ref);
+  const mesesExpirados = snapMeta.docs.map(d => d.id).filter(id => !mesesValidos.has(id));
+
+  // Função auxiliar: deleta todos os docs de um mês do historico_recente
+  async function deletarMesRecente(mesAno) {
+    let snap = await db.collection('historico_recente').where('mesAno','==',mesAno).limit(500).get();
+    while (snap.size > 0) {
+      const batches = [];
+      const chunks = [];
+      for (let i = 0; i < snap.docs.length; i += 400) chunks.push(snap.docs.slice(i, i+400));
+      for (const chunk of chunks) {
+        const b = db.batch();
+        chunk.forEach(d => b.delete(d.ref));
+        batches.push(b.commit());
       }
-      await db.collection('historico_recente_meta').doc(doc.id).delete();
+      await Promise.all(batches);
+      snap = await db.collection('historico_recente').where('mesAno','==',mesAno).limit(500).get();
     }
   }
 
-  await deleteCollection('visao_atual');
+  // Roda limpezas em paralelo
+  await Promise.all([
+    deletarMesRecente(mesAtual),           // reescreve mês atual
+    deleteCollection('visao_atual'),        // limpa ocorrências ativas
+    ...mesesExpirados.map(async mes => {    // remove meses fora da janela
+      await deletarMesRecente(mes);
+      await db.collection('historico_recente_meta').doc(mes).delete();
+    })
+  ]);
 
   const BATCH_SIZE = 400;
   let idx = 0;
   let totalAtivas = 0, totalFinalizadas = 0;
+  const histUpdates = {}; // acumula updates do historico para aplicar no final
 
   while (idx < rows.length) {
     const batch = db.batch();
@@ -325,18 +328,21 @@ async function processAtual(file) {
           });
         }
 
-        // Atualiza base histórica se for mais recente
+        // Coleta atualizações do histórico para aplicar em batch depois
         if (emHistorico && dtInicio) {
           const dtOrigHist = historicoMap[uc].dataOrigem
             ? new Date(historicoMap[uc].dataOrigem) : null;
           if (!dtOrigHist || dtInicio >= dtOrigHist) {
-            await db.collection('historico').doc(uc).update({
+            histUpdates[uc] = {
               ultimaOS:   ocorrencia,
               dataOrigem: dtInicio ? dtInicio.toISOString() : null,
               dataConc:   dtFim    ? dtFim.toISOString()    : null,
               prefixo:    equipe   || '----',
               causa:      causaFinal || '----',
-            });
+            };
+            // Atualiza o map local para que ocorrências posteriores da mesma UC
+            // não sobrescrevam com dados mais antigos
+            historicoMap[uc] = { ...historicoMap[uc], dataOrigem: dtInicio.toISOString() };
           }
         }
         continue;
@@ -374,6 +380,17 @@ async function processAtual(file) {
     await batch.commit();
     idx += BATCH_SIZE;
     setStatus('status-atual', `⏳ Salvando... ${Math.min(idx, rows.length)}/${rows.length}`, 'loading');
+  }
+
+  // Aplica atualizações da base histórica em batch (muito mais rápido que await por linha)
+  setStatus('status-atual', '⏳ Atualizando base histórica...', 'loading');
+  const histKeys = Object.keys(histUpdates);
+  for (let i = 0; i < histKeys.length; i += 400) {
+    const b = db.batch();
+    histKeys.slice(i, i+400).forEach(ucKey => {
+      b.update(db.collection('historico').doc(ucKey), histUpdates[ucKey]);
+    });
+    await b.commit();
   }
 
   // Atualiza meta do mês atual no historico_recente
