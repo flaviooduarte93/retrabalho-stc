@@ -259,18 +259,25 @@ document.addEventListener('DOMContentLoaded', () => {
   const fromParam = params.get('from');
   const navEl     = document.getElementById('topbar-nav');
 
-  if (fromParam === 'alertas' && navEl) {
-    navEl.innerHTML = `
-      <a href="index.html" class="topbar-navitem">Início</a>
-      <span class="topbar-navsep">›</span>
-      <a href="alertas.html" class="topbar-navitem topbar-navitem--active">Alertas</a>
-      <span class="topbar-navsep">›</span>
-      <span class="topbar-navitem topbar-navitem--current">Pesquisa</span>`;
-  } else if (navEl) {
-    navEl.innerHTML = `
-      <a href="index.html" class="topbar-navitem">Início</a>
-      <span class="topbar-navsep">›</span>
-      <span class="topbar-navitem topbar-navitem--current">Pesquisa</span>`;
+  if (navEl) {
+    const origens = {
+      'alertas':       { label: 'Alertas',      href: 'alertas.html' },
+      'detalhamento':  { label: 'UCs em Retrabalho', href: 'detalhamento.html' },
+    };
+    const origem = origens[fromParam];
+    if (origem) {
+      navEl.innerHTML = `
+        <a href="index.html" class="topbar-navitem">Início</a>
+        <span class="topbar-navsep">›</span>
+        <a href="${origem.href}" class="topbar-navitem topbar-navitem--active">${origem.label}</a>
+        <span class="topbar-navsep">›</span>
+        <span class="topbar-navitem topbar-navitem--current">Pesquisa</span>`;
+    } else {
+      navEl.innerHTML = `
+        <a href="index.html" class="topbar-navitem">Início</a>
+        <span class="topbar-navsep">›</span>
+        <span class="topbar-navitem topbar-navitem--current">Pesquisa</span>`;
+    }
   }
 
   if (ucParam) {
