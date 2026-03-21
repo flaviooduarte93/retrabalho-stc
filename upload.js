@@ -22,6 +22,36 @@ function parseDate(val) {
   return null;
 }
 
+
+// Limpa texto com encoding corrompido para exibição
+// Ex: INSTALAC?O → INSTALAÇÃO, MEDIÇ?O → MEDIÇÃO
+function sanitizeId(s) {
+  // Firestore não aceita '/' em IDs de documento — substitui por '_'
+  return String(s || '----').replace(/\//g, '_').replace(/\s+/g, '_').trim() || '----';
+}
+
+function limparTexto(s) {
+  if (!s) return s;
+  return String(s)
+    .replace(/C\?O/gi,  'ÇÃO')
+    .replace(/\?AO/gi,  'ÃO')
+    .replace(/C\?O/gi,  'ÇÃO')
+    .replace(/\?o/gi,   'ão')
+    .replace(/\?A/gi,   'Ã')
+    .replace(/\?a/gi,   'ã')
+    .replace(/\?E/gi,   'Ê')
+    .replace(/\?e/gi,   'ê')
+    .replace(/\?I/gi,   'Í')
+    .replace(/\?i/gi,   'í')
+    .replace(/\?U/gi,   'Ú')
+    .replace(/\?u/gi,   'ú')
+    .replace(/\?C/gi,   'Ç')
+    .replace(/\?c/gi,   'ç')
+    .replace(/C\?/gi,   'Ç')
+    .replace(/\?/g,     'Ã')   // fallback: ? isolado vira Ã
+    .trim();
+}
+
 function setStatus(elId, msg, type) {
   const el = document.getElementById(elId);
   if (!el) return;
@@ -145,7 +175,7 @@ async function processHistorico(file) {
         // Causa: coluna TIPO_CONCLUSAO (própria causa do último atendimento).
         // Fallback para TIPO_CONCLUSAO_ORIGEM caso a coluna não exista na base.
         if (osAtual && !osQueEhOrigem.has(osAtual)) {
-          const causaFinal = String(r['TIPO_CONCLUSAO'] || r['TIPO_CONCLUSAO_ORIGEM'] || '') || '----';
+          const causaFinal = limparTexto(String(r['TIPO_CONCLUSAO'] || r['TIPO_CONCLUSAO_ORIGEM'] || '')) || '----';
           osMap[osAtual] = {
             os:         osAtual,
             dataOrigem: parseDate(r['DATA_ORIGEM'])?.toISOString() || null,
@@ -177,7 +207,7 @@ async function processHistorico(file) {
         historico: historicoList
       };
 
-      batch.set(db.collection('historico').doc(uc), docData);
+      batch.set(db.collection('historico').doc(sanitizeId(uc)), docData);
     }
 
     await batch.commit();
@@ -234,7 +264,7 @@ async function processAtual(file) {
   for (const row of rows) {
     const pe = String(row['Ponto Elétrico']||'').trim();
     const m  = pe.match(/^(.+?)\s+-\s/);
-    ucsNoArquivo.add(m ? m[1].trim() : pe.split(' -')[0].trim());
+    ucsNoArquivo.add(sanitizeId(m ? m[1].trim() : pe.split(' -')[0].trim()));
   }
   const ucsArr = [...ucsNoArquivo];
 
@@ -295,9 +325,9 @@ async function processAtual(file) {
     const causa      = String(row['Causa']||'').trim();
 
     const m  = pe.match(/^(.+?)\s+-\s/);
-    const uc = m ? m[1].trim() : pe.split(' -')[0].trim();
+    const uc = sanitizeId(m ? m[1].trim() : pe.split(' -')[0].trim());
 
-    const causaFinal  = causa || motivo;
+    const causaFinal  = limparTexto(causa || motivo);
     const procedente  = isProcedente(causaFinal);
     const finalizado  = estado.toUpperCase().includes('FINALIZADA');
     const emHistorico = !!historicoMap[uc];
@@ -312,7 +342,7 @@ async function processAtual(file) {
     };
 
     if (finalizado) {
-      docsRecente.push({ id:`${mesAtual}_${ocorrencia}`, ...docBase, finalizado:true, ativo:false });
+      docsRecente.push({ id:sanitizeId(`${mesAtual}_${ocorrencia}`), ...docBase, finalizado:true, ativo:false });
 
       if (emHistorico && dtInicio) {
         const dtOrigHist = historicoMap[uc].dataOrigem ? new Date(historicoMap[uc].dataOrigem) : null;
@@ -328,7 +358,7 @@ async function processAtual(file) {
         }
       }
     } else if (ocorrencia) {
-      docsRecente.push({ id:`${mesAtual}_${ocorrencia}`, ...docBase, finalizado:false, ativo:true });
+      docsRecente.push({ id:sanitizeId(`${mesAtual}_${ocorrencia}`), ...docBase, finalizado:false, ativo:true });
       docsVisaoAtual.push({
         ...docBase, emHistorico,
         qtdAtendimentos: emHistorico ? (historicoMap[uc].qtdAtendimentos||1) : 0,
@@ -346,7 +376,7 @@ async function processAtual(file) {
       const b = db.batch();
       docs.slice(i,i+400).forEach(doc => {
         const { id, ...d } = doc;
-        b.set(db.collection(colecao).doc(idFn ? idFn(doc) : id), d);
+        b.set(db.collection(colecao).doc(sanitizeId(idFn ? idFn(doc) : id)), d);
       });
       await b.commit();
     }
@@ -362,7 +392,7 @@ async function processAtual(file) {
     const entries = Object.entries(histUpdates);
     for (let i = 0; i < entries.length; i += 400) {
       const b = db.batch();
-      entries.slice(i,i+400).forEach(([uc, upd]) => b.update(db.collection('historico').doc(uc), upd));
+      entries.slice(i,i+400).forEach(([uc, upd]) => b.update(db.collection('historico').doc(sanitizeId(uc)), upd));
       await b.commit();
     }
   }

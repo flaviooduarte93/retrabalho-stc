@@ -162,15 +162,15 @@ async function processarPlanilhaRecente(file, fileIndex, totalFiles) {
       const finalizado = estado.toUpperCase().includes('FINALIZADA');
       const ativo      = !finalizado && ESTADOS_ATIVOS.some(e =>
         estado.toUpperCase().includes(e.replace(/^[A-Z]-/,'').toUpperCase()));
-      const causaFinal = causa || motivo;
+      const causaFinal = limparTexto(causa || motivo);
       const procedente = isProcedente(causaFinal);
 
-      const ref = db.collection('historico_recente').doc(`${mesAno}_${ocorrencia}`);
+      const ref = db.collection('historico_recente').doc(sanitizeId(`${mesAno}_${ocorrencia}`));
       batch.set(ref, {
         ocorrencia, estado, pontoEletrico: pontoEl, uc, equipe,
         dtInicio:  dtInicio ? dtInicio.toISOString() : null,
         dtFim:     dtFim    ? dtFim.toISOString()    : null,
-        causa: causaFinal, seccional, municipio,
+        causa: limparTexto(causaFinal), seccional, municipio,
         mesAno, finalizado, ativo, procedente
       });
     }
