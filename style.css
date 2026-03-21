@@ -1196,3 +1196,136 @@ body {
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* ===== CARD TEAL (3º botão navegação) ===== */
+.card-teal {
+  background: linear-gradient(135deg, #00796B, #004D40);
+  box-shadow: 0 8px 32px rgba(0,121,107,0.3);
+  border-color: rgba(255,255,255,0.1);
+  color: var(--white);
+}
+.card-teal:hover { box-shadow: 0 16px 50px rgba(0,121,107,0.5); }
+
+/* ===== VISÃO SELECTOR (3 botões no topo de alertas) ===== */
+.visao-selector {
+  display: flex; gap: 10px; flex-wrap: wrap;
+  margin-bottom: 24px;
+  padding: 4px;
+  background: var(--white);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-sm);
+}
+.visao-btn {
+  flex: 1; padding: 12px 16px;
+  border: none; border-radius: var(--radius-sm);
+  font-family: var(--font-body); font-size: 0.85rem; font-weight: 600;
+  cursor: pointer; transition: all .2s;
+  background: transparent; color: var(--eq-gray-600);
+  white-space: nowrap;
+}
+.visao-btn:hover { background: var(--eq-gray-100); color: var(--eq-gray-900); }
+.visao-btn--active { color: var(--white) !important; }
+.visao-btn--danger.visao-btn--active  { background: var(--eq-red); }
+.visao-btn--warning.visao-btn--active { background: var(--eq-amber-dark); }
+.visao-btn--success.visao-btn--active { background: var(--eq-green); }
+.visao-btn--danger  { color: var(--eq-red); }
+.visao-btn--warning { color: var(--eq-amber-dark); }
+.visao-btn--success { color: var(--eq-green); }
+
+/* ===== BADGES PROCEDÊNCIA ===== */
+.badge-procedente {
+  background: var(--eq-green-light); color: var(--eq-green);
+  padding: 2px 10px; border-radius: 20px;
+  font-size: 0.7rem; font-weight: 700;
+}
+.badge-improcedente {
+  background: var(--eq-red-light); color: var(--eq-red);
+  padding: 2px 10px; border-radius: 20px;
+  font-size: 0.7rem; font-weight: 700;
+}
+
+/* ===== INFO BOX ===== */
+.alert-info-box {
+  background: var(--eq-amber-light);
+  border: 1px solid var(--eq-amber);
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 0.83rem;
+  color: var(--eq-gray-900);
+  line-height: 1.5;
+}
+
+/* Upload 3 colunas */
+.upload-grid { grid-template-columns: 1fr 1fr 1fr !important; }
+@media(max-width:700px) { .upload-grid { grid-template-columns: 1fr !important; } }
+
+/* ===== PAINEL STATUS DAS BASES ===== */
+.bases-status {
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: var(--radius-lg);
+  padding: 18px 24px;
+}
+.bases-status-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 0.78rem; font-weight: 700;
+  color: var(--eq-gray-400);
+  text-transform: uppercase; letter-spacing: 0.6px;
+  margin-bottom: 14px;
+}
+.bases-chips {
+  display: flex; flex-wrap: wrap; gap: 10px;
+}
+.bases-loading {
+  font-size: 0.8rem; color: var(--eq-gray-600);
+  font-style: italic;
+}
+
+/* Chip individual de base */
+.base-chip {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 14px;
+  border-radius: 30px;
+  border: 1px solid transparent;
+  font-size: 0.78rem;
+}
+.chip-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.chip-label { font-weight: 700; color: var(--white); }
+.chip-tag {
+  font-size: 0.68rem; font-weight: 600;
+  padding: 1px 7px; border-radius: 10px;
+  opacity: 0.9;
+}
+.chip-count {
+  font-size: 0.7rem; color: rgba(255,255,255,0.5);
+}
+
+/* Cores por tipo */
+.chip-fechado {
+  background: rgba(21,101,192,0.2);
+  border-color: rgba(21,101,192,0.35);
+}
+.chip-fechado .chip-dot { background: var(--eq-blue-light); }
+.chip-fechado .chip-tag { background: rgba(21,101,192,0.3); color: var(--eq-blue-light); }
+
+.chip-atual {
+  background: rgba(249,168,37,0.15);
+  border-color: rgba(249,168,37,0.4);
+}
+.chip-atual .chip-dot { background: var(--eq-amber); }
+.chip-atual .chip-tag { background: rgba(249,168,37,0.25); color: var(--eq-amber); }
+
+.chip-visao {
+  background: rgba(0,121,107,0.2);
+  border-color: rgba(0,121,107,0.4);
+}
+.chip-visao .chip-dot { background: #4DB6AC; }
+.chip-visao .chip-tag { background: rgba(0,121,107,0.3); color: #4DB6AC; }
+
+.chip-historico {
+  background: rgba(255,255,255,0.06);
+  border-color: rgba(255,255,255,0.12);
+}
+.chip-historico .chip-dot { background: var(--eq-gray-400); }

@@ -15,28 +15,42 @@
       <span class="brand-title">eq<span>ua</span>torial</span>
       <span class="topbar-badge">Retrabalho</span>
     </div>
-    <a href="index.html" class="topbar-back">
-      ← Início
-    </a>
+    <div class="topbar-nav">
+      <a href="index.html" class="topbar-navitem">Início</a>
+      <span class="topbar-navsep">›</span>
+      <span class="topbar-navitem topbar-navitem--current">Alertas</span>
+    </div>
   </nav>
 
-  <main class="page-main" id="app">
+  <main class="page-main">
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:4px">
       <h1 class="page-title" style="margin-bottom:0">Alertas de Campo</h1>
-      <button class="search-btn" id="btn-refresh" style="padding:10px 20px;font-size:0.85rem">
-        ↻ Atualizar
-      </button>
+      <button class="search-btn" id="btn-refresh" style="padding:10px 20px;font-size:0.85rem">↻ Atualizar</button>
     </div>
-    <p class="page-subtitle">Ocorrências ativas que envolvem UCs em período de retrabalho (90 dias).</p>
+    <p class="page-subtitle">Ocorrências ativas classificadas por risco de retrabalho.</p>
 
     <div id="stats-container"></div>
+
+    <!-- Seletor de visão -->
+    <div class="visao-selector">
+      <button id="visao-retrabalho" class="visao-btn visao-btn--active visao-btn--danger" onclick="mudarVisao('retrabalho')">
+        🔴 Retrabalho Confirmado
+      </button>
+      <button id="visao-possivel" class="visao-btn visao-btn--warning" onclick="mudarVisao('possivel')">
+        ⚠ Possível Retrabalho
+      </button>
+      <button id="visao-primeiro" class="visao-btn visao-btn--success" onclick="mudarVisao('primeiro')">
+        🟢 Primeiro Atendimento
+      </button>
+    </div>
+
     <div id="alertas-container"></div>
-    <div id="historico-container"></div>
   </main>
 
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   <script src="firebase-init.js"></script>
+  <script src="causas-improcedentes.js"></script>
   <script src="alertas.js"></script>
 </body>
 </html>

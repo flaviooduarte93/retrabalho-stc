@@ -3,41 +3,36 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Pesquisa de UC — Equatorial Retrabalho</title>
+  <title>Detalhamento — Equatorial Retrabalho</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"/>
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body class="inner-page">
-
   <nav class="topbar">
     <div class="topbar-brand">
       <span class="brand-title">eq<span>ua</span>torial</span>
       <span class="topbar-badge">Retrabalho</span>
     </div>
-    <!-- Breadcrumb de navegação — preenchido pelo JS conforme origem -->
-    <div class="topbar-nav" id="topbar-nav">
+    <div class="topbar-nav">
       <a href="index.html" class="topbar-navitem">Início</a>
+      <span class="topbar-navsep">›</span>
+      <span class="topbar-navitem topbar-navitem--current">UCs em Retrabalho</span>
     </div>
   </nav>
 
-  <main class="page-main" id="app">
-    <h1 class="page-title">Pesquisa de UC</h1>
-    <p class="page-subtitle">Digite a Unidade Consumidora para consultar o histórico de atendimentos.</p>
+  <main class="page-main">
+    <h1 class="page-title">UCs em Retrabalho sem Ocorrência Ativa</h1>
+    <p class="page-subtitle">UCs com histórico de retrabalho dentro do período de 90 dias que não possuem ocorrência ativa no momento.</p>
 
-    <div class="search-box">
-      <input type="text" class="search-input" id="search-input"
-             placeholder="Número da UC..." autocomplete="off"/>
-      <button class="search-btn" id="search-btn">Pesquisar</button>
-    </div>
-
-    <div id="resultado"></div>
+    <div id="stats-det"></div>
+    <div id="det-container"></div>
   </main>
 
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
   <script src="firebase-init.js"></script>
   <script src="causas-improcedentes.js"></script>
-  <script src="pesquisa.js"></script>
+  <script src="detalhamento.js"></script>
 </body>
 </html>
