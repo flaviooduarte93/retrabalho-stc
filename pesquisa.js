@@ -225,60 +225,134 @@ function renderHistoricoTable(historico) {
 // ===== PESQUISA PRINCIPAL =====
 async function pesquisarUC(uc) {
   const resultado = document.getElementById('resultado');
-  resultado.innerHTML = `<div class="loading-state"><div class="spinner"></div><br>Consultando base de dados...</div>`;
+  resultado.innerHTML = `<div class="loading-state"><div class="spinner"></div><br>Consultando todas as bases...</div>`;
 
   uc = uc.trim();
   if (!uc) { resultado.innerHTML = `<div class="no-results"><p>Digite uma UC para pesquisar.</p></div>`; return; }
 
   try {
-    const doc = await db.collection('historico').doc(uc).get();
-    if (!doc.exists) {
+    // ── 1. Base histórica (retrabalho confirmado) ──
+    const docHist = await db.collection('historico').doc(uc).get();
+    const dadosHist = docHist.exists ? docHist.data() : null;
+    const historicoBase = dadosHist ? (dadosHist.historico || []) : [];
+
+    // ── 2. Histórico recente (últimos 3 meses + atual) ──
+    const snapRecente = await db.collection('historico_recente')
+      .where('uc', '==', uc).get();
+    const recentes = [];
+    snapRecente.forEach(doc => recentes.push(doc.data()));
+
+    // ── 3. Visão atual (ocorrências abertas agora) ──
+    const snapAtual = await db.collection('visao_atual')
+      .where('uc', '==', uc).get();
+    const ativas = [];
+    snapAtual.forEach(doc => ativas.push(doc.data()));
+
+    // Verifica se a UC existe em alguma base
+    if (!dadosHist && !recentes.length && !ativas.length) {
       resultado.innerHTML = `
         <div class="no-results">
           <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
             <circle cx="30" cy="30" r="28" stroke="#C8D6E5" stroke-width="2"/>
             <path d="M20 30h20M30 20v20" stroke="#C8D6E5" stroke-width="2" stroke-linecap="round"/>
           </svg>
-          <p>UC <strong>${uc}</strong> não encontrada na base histórica.</p>
+          <p>UC <strong>${uc}</strong> não encontrada em nenhuma base.</p>
         </div>`;
       return;
     }
 
-    const d = doc.data();
-    const isRet = calcRetrabalho(d.dataConc);
-    const fim90 = d.dataConc ? new Date(new Date(d.dataConc).getTime() + 91*86400000) : null;
-    const diasR = fim90 ? Math.ceil((fim90 - new Date()) / 86400000) : null;
+    // ── 4. Monta histórico unificado ──
+    // Começa com os atendimentos da base histórica
+    const osVistas = new Set(historicoBase.map(h => h.os));
+
+    // Adiciona F-FINALIZADA do histórico recente que não estejam na base histórica
+    const recentesFinalizados = recentes
+      .filter(r => r.finalizado && r.dtFim)
+      .map(r => ({
+        os:        r.ocorrencia,
+        dataOrigem: r.dtInicio || null,
+        dataConc:   r.dtFim    || null,
+        prefixo:   r.equipe   || '----',
+        causa:     r.causa    || '----',
+        fonte:     'recente'
+      }))
+      .filter(r => !osVistas.has(r.os));
+
+    // Adiciona ocorrências ativas (abertas) — sem data de conclusão
+    const ativasFormatadas = ativas.map(a => ({
+      os:        a.ocorrencia,
+      dataOrigem: a.dtInicio || null,
+      dataConc:   a.dtFim    || null,
+      prefixo:   a.equipe   || '----',
+      causa:     a.causa    || a.motivo || '----',
+      fonte:     'ativa',
+      estado:    a.estado
+    })).filter(a => !osVistas.has(a.os));
+
+    // Unifica e ordena cronologicamente
+    const historicoCompleto = [
+      ...historicoBase,
+      ...recentesFinalizados,
+      ...ativasFormatadas
+    ].sort((a, b) => (a.dataOrigem||'') > (b.dataOrigem||'') ? 1 : -1);
+
+    // ── 5. Calcula status consolidado ──
+    // Usa o último atendimento com data de conclusão para o retrabalho
+    const ultimoComConc = [...historicoCompleto]
+      .filter(h => h.dataConc)
+      .sort((a,b) => (b.dataConc||'') > (a.dataConc||'') ? 1 : -1)[0];
+
+    const ultimoGeral = historicoCompleto[historicoCompleto.length - 1] || {};
+    const dataConc  = ultimoComConc?.dataConc || null;
+    const isRet     = calcRetrabalho(dataConc);
+    const fim90     = dataConc ? new Date(new Date(dataConc).getTime() + 91*86400000) : null;
+    const diasR     = fim90 ? Math.ceil((fim90 - new Date()) / 86400000) : null;
+    const totalAtend = historicoCompleto.length;
+
+    // Fontes encontradas para exibir badges informativos
+    const fontes = [];
+    if (dadosHist) fontes.push('Base Histórica');
+    if (recentesFinalizados.length) fontes.push('Histórico Recente');
+    if (ativasFormatadas.length) fontes.push('Ocorrências Ativas');
 
     resultado.innerHTML = `
       <div class="result-card">
         <div class="result-header">
           <div class="result-uc">UC ${uc}</div>
-          ${isRet ? `<span class="badge-retrabalho">⚠ Em Retrabalho</span>` : `<span class="badge-ok">✓ Fora do Período</span>`}
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+            ${isRet ? `<span class="badge-retrabalho">⚠ Em Retrabalho</span>` : `<span class="badge-ok">✓ Fora do Período</span>`}
+            ${ativasFormatadas.length ? `<span class="badge badge-amber">🔴 ${ativasFormatadas.length} ativa(s)</span>` : ''}
+          </div>
         </div>
+
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
+          ${fontes.map(f => `<span style="font-size:0.7rem;background:var(--eq-blue-pale);color:var(--eq-blue-dark);padding:2px 10px;border-radius:20px;font-weight:600">📂 ${f}</span>`).join('')}
+        </div>
+
         <div class="info-grid">
           <div class="info-item">
             <div class="info-label">Total de Atendimentos</div>
-            <div class="info-value highlight">${d.qtdAtendimentos||1}</div>
+            <div class="info-value highlight">${totalAtend}</div>
           </div>
           <div class="info-item">
             <div class="info-label">Última OS</div>
-            <div class="info-value">${d.ultimaOS||'----'}</div>
+            <div class="info-value">${ultimoGeral.os||'----'}</div>
           </div>
           <div class="info-item">
             <div class="info-label">Data Início Último Atend.</div>
-            <div class="info-value">${fmtDate(d.dataOrigem)}</div>
+            <div class="info-value">${fmtDate(ultimoGeral.dataOrigem)}</div>
           </div>
           <div class="info-item">
             <div class="info-label">Data Fim Último Atend.</div>
-            <div class="info-value">${fmtDate(d.dataConc)}</div>
+            <div class="info-value">${fmtDate(ultimoGeral.dataConc)}</div>
           </div>
           <div class="info-item">
             <div class="info-label">Equipe</div>
-            <div class="info-value">${d.prefixo||'----'}</div>
+            <div class="info-value">${ultimoGeral.prefixo||'----'}</div>
           </div>
           <div class="info-item">
             <div class="info-label">Causa</div>
-            <div class="info-value">${d.causa||'----'}</div>
+            <div class="info-value">${ultimoGeral.causa||'----'}</div>
           </div>
           ${fim90 ? `
           <div class="info-item">
@@ -290,8 +364,8 @@ async function pesquisarUC(uc) {
           </div>` : ''}
         </div>
       </div>
-      ${renderGantt(d.historico)}
-      ${renderHistoricoTable(d.historico)}`;
+      ${renderGantt(historicoCompleto)}
+      ${renderHistoricoTable(historicoCompleto)}`;
 
   } catch(err) {
     console.error(err);
