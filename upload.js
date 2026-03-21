@@ -241,36 +241,35 @@ async function processAtual(file) {
   const headers = allRows[headerIdx].map(h => String(h).trim());
   let rows = allRows.slice(headerIdx + 1)
     .filter(r => r.some(c => c !== ''))
-    .map(r => { const o={}; headers.forEach((h,i)=>{o[h]=r[i]??'';}); return o; })
-    .filter(r => String(r['Abrangência']||'').trim().toUpperCase() === 'CR');
+    .map(r => { const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ''; }); return o; })
+    .filter(r => String(r['Abrangência'] || '').trim().toUpperCase() === 'CR');
 
   if (!rows.length) {
     setStatus('status-atual', '❌ Nenhum registro CR encontrado.', 'error'); return;
   }
 
-  setStatus('status-atual', `⏳ ${rows.length} registros CR — preparando...`, 'loading');
+  setStatus('status-atual', `⏳ ${rows.length} registros — consultando histórico...`, 'loading');
 
-  // Mês atual e janela válida
+  // Mês atual
   const hoje = new Date();
   const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  const uploadTs = hoje.toISOString(); // timestamp deste upload
+
+  // Meses válidos para janela deslizante
   const mesesValidos = new Set([mesAtual]);
   for (let i = 1; i <= 3; i++) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
     mesesValidos.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
   }
 
-  // Extrai as UCs únicas presentes no arquivo (só buscamos essas no Firestore)
+  // Busca histórico SOMENTE das UCs presentes no arquivo (lotes de 30)
   const ucsNoArquivo = new Set();
   for (const row of rows) {
-    const pe = String(row['Ponto Elétrico']||'').trim();
+    const pe = String(row['Ponto Elétrico'] || '').trim();
     const m  = pe.match(/^(.+?)\s+-\s/);
     ucsNoArquivo.add(sanitizeId(m ? m[1].trim() : pe.split(' -')[0].trim()));
   }
   const ucsArr = [...ucsNoArquivo];
-
-  setStatus('status-atual', '⏳ Consultando bases em paralelo...', 'loading');
-
-  // Busca histórico SOMENTE das UCs do arquivo (em lotes de 30 — limite do Firestore "in")
   const historicoMap = {};
   const chunks30 = [];
   for (let i = 0; i < ucsArr.length; i += 30) chunks30.push(ucsArr.slice(i, i+30));
@@ -279,50 +278,24 @@ async function processAtual(file) {
     snap.forEach(doc => { historicoMap[doc.id] = doc.data(); });
   }));
 
-  // Limpezas em paralelo enquanto já temos os dados necessários
-  async function deletarMesRecente(mesAno) {
-    let snap = await db.collection('historico_recente').where('mesAno','==',mesAno).limit(500).get();
-    while (snap.size > 0) {
-      const ps = [];
-      for (let i = 0; i < snap.docs.length; i += 400) {
-        const b = db.batch();
-        snap.docs.slice(i,i+400).forEach(d => b.delete(d.ref));
-        ps.push(b.commit());
-      }
-      await Promise.all(ps);
-      snap = await db.collection('historico_recente').where('mesAno','==',mesAno).limit(500).get();
-    }
-  }
+  setStatus('status-atual', '⏳ Processando e salvando...', 'loading');
 
-  const snapMeta = await db.collection('historico_recente_meta').get();
-  const mesesExpirados = snapMeta.docs.map(d=>d.id).filter(id=>!mesesValidos.has(id));
-
-  setStatus('status-atual', '⏳ Limpando dados anteriores...', 'loading');
-  await Promise.all([
-    deletarMesRecente(mesAtual),
-    deleteCollection('visao_atual'),
-    ...mesesExpirados.map(async mes => {
-      await deletarMesRecente(mes);
-      await db.collection('historico_recente_meta').doc(mes).delete();
-    })
-  ]);
-
-  // Processa linhas — separa em dois grupos: ativas e finalizadas
-  const docsVisaoAtual = [];
-  const docsRecente    = [];
-  const histUpdates    = {};
+  // Processa linhas e monta docs
+  const docsRecente   = [];
+  const docsAtivas    = [];
+  const histUpdates   = {};
 
   for (const row of rows) {
-    const ocorrencia = String(row['Número']||'').trim();
-    const estado     = String(row['Estado']||'').trim();
-    const pe         = String(row['Ponto Elétrico']||'').trim();
-    const equipe     = String(row['Equipe']||'').trim();
+    const ocorrencia = String(row['Número']        || '').trim();
+    const estado     = String(row['Estado']         || '').trim();
+    const pe         = String(row['Ponto Elétrico'] || '').trim();
+    const equipe     = String(row['Equipe']         || '').trim();
     const dtInicio   = parseDate(row['Data Início']);
     const dtFim      = parseDate(row['Data Fim']);
-    const seccional  = String(row['Seccional']||'').trim();
-    const municipio  = String(row['Município']||'').trim();
-    const motivo     = String(row['Motivo']||'').trim();
-    const causa      = String(row['Causa']||'').trim();
+    const seccional  = String(row['Seccional']      || '').trim();
+    const municipio  = String(row['Município']       || '').trim();
+    const motivo     = String(row['Motivo']         || '').trim();
+    const causa      = String(row['Causa']          || '').trim();
 
     const m  = pe.match(/^(.+?)\s+-\s/);
     const uc = sanitizeId(m ? m[1].trim() : pe.split(' -')[0].trim());
@@ -332,49 +305,58 @@ async function processAtual(file) {
     const finalizado  = estado.toUpperCase().includes('FINALIZADA');
     const emHistorico = !!historicoMap[uc];
 
-    const docBase = {
+    const base = {
       ocorrencia, estado, pontoEletrico: pe, uc,
-      equipe:   equipe  ||'----',
+      equipe:   equipe   || '----',
       dtInicio: dtInicio ? dtInicio.toISOString() : null,
       dtFim:    dtFim    ? dtFim.toISOString()    : null,
       causa: causaFinal, seccional, municipio,
-      mesAno: mesAtual, procedente
+      mesAno: mesAtual, procedente, uploadTs
     };
 
-    if (finalizado) {
-      docsRecente.push({ id:sanitizeId(`${mesAtual}_${ocorrencia}`), ...docBase, finalizado:true, ativo:false });
+    // Grava no historico_recente (set sobrescreve — sem deleção prévia)
+    if (ocorrencia) {
+      docsRecente.push({
+        id: sanitizeId(`${mesAtual}_${ocorrencia}`),
+        ...base,
+        finalizado,
+        ativo: !finalizado
+      });
+    }
 
+    if (finalizado) {
+      // Coleta update do histórico para aplicar em batch depois
       if (emHistorico && dtInicio) {
         const dtOrigHist = historicoMap[uc].dataOrigem ? new Date(historicoMap[uc].dataOrigem) : null;
         if (!dtOrigHist || dtInicio >= dtOrigHist) {
           histUpdates[uc] = {
-            ultimaOS: ocorrencia,
+            ultimaOS:   ocorrencia,
             dataOrigem: dtInicio.toISOString(),
             dataConc:   dtFim ? dtFim.toISOString() : null,
-            prefixo:    equipe||'----',
-            causa:      causaFinal||'----',
+            prefixo:    equipe || '----',
+            causa:      causaFinal || '----',
           };
-          historicoMap[uc] = { ...historicoMap[uc], dataOrigem: dtInicio.toISOString() };
+          historicoMap[uc].dataOrigem = dtInicio.toISOString();
         }
       }
     } else if (ocorrencia) {
-      docsRecente.push({ id:sanitizeId(`${mesAtual}_${ocorrencia}`), ...docBase, finalizado:false, ativo:true });
-      docsVisaoAtual.push({
-        ...docBase, emHistorico,
-        qtdAtendimentos: emHistorico ? (historicoMap[uc].qtdAtendimentos||1) : 0,
-        dataConc:        emHistorico ? (historicoMap[uc].dataConc||null)     : null,
-        causaHistorico:  emHistorico ? (historicoMap[uc].causa||'----')      : '----',
+      docsAtivas.push({
+        ...base,
+        emHistorico,
+        qtdAtendimentos: emHistorico ? (historicoMap[uc].qtdAtendimentos || 1) : 0,
+        dataConc:        emHistorico ? (historicoMap[uc].dataConc || null)     : null,
+        causaHistorico:  emHistorico ? (historicoMap[uc].causa    || '----')   : '----',
       });
     }
   }
 
-  setStatus('status-atual', `⏳ Salvando ${docsVisaoAtual.length} ativas + ${docsRecente.length} no recente...`, 'loading');
+  // Grava historico_recente e histórico em paralelo (set sobrescreve, sem deletar)
+  setStatus('status-atual', `⏳ Gravando ${docsRecente.length} registros...`, 'loading');
 
-  // Grava tudo em paralelo usando batches
-  async function gravarBatches(colecao, docs, idFn) {
+  async function gravarBatch(colecao, docs, idFn) {
     for (let i = 0; i < docs.length; i += 400) {
       const b = db.batch();
-      docs.slice(i,i+400).forEach(doc => {
+      docs.slice(i, i+400).forEach(doc => {
         const { id, ...d } = doc;
         b.set(db.collection(colecao).doc(sanitizeId(idFn ? idFn(doc) : id)), d);
       });
@@ -382,34 +364,74 @@ async function processAtual(file) {
     }
   }
 
-  await Promise.all([
-    gravarBatches('historico_recente', docsRecente, d => d.id),
-    gravarBatches('visao_atual', docsVisaoAtual, d => d.ocorrencia),
-  ]);
-
-  // Aplica updates do histórico em batch
-  if (Object.keys(histUpdates).length) {
+  async function gravarHistUpdates() {
     const entries = Object.entries(histUpdates);
     for (let i = 0; i < entries.length; i += 400) {
       const b = db.batch();
-      entries.slice(i,i+400).forEach(([uc, upd]) => b.update(db.collection('historico').doc(sanitizeId(uc)), upd));
+      entries.slice(i, i+400).forEach(([uc, upd]) =>
+        b.update(db.collection('historico').doc(sanitizeId(uc)), upd)
+      );
       await b.commit();
     }
   }
 
-  // Atualiza meta
+  // Grava recente + hist em paralelo
+  await Promise.all([
+    gravarBatch('historico_recente', docsRecente, d => d.id),
+    gravarHistUpdates(),
+  ]);
+
+  // Substitui visao_atual:
+  // 1. Grava novos docs (rápido — set sobrescreve os existentes)
+  // 2. Apaga docs que não vieram neste upload (IDs não presentes no novo conjunto)
+  setStatus('status-atual', '⏳ Atualizando ocorrências ativas...', 'loading');
+
+  const idsNovos = new Set(docsAtivas.map(d => sanitizeId(d.ocorrencia)));
+
+  // Grava novos em paralelo com busca dos antigos
+  const [, snapVisaoAtual] = await Promise.all([
+    gravarBatch('visao_atual', docsAtivas, d => d.ocorrencia),
+    db.collection('visao_atual').get()
+  ]);
+
+  // Apaga apenas os que não estão no novo upload
+  const parasApagar = snapVisaoAtual.docs.filter(d => !idsNovos.has(d.id));
+  for (let i = 0; i < parasApagar.length; i += 400) {
+    const b = db.batch();
+    parasApagar.slice(i, i+400).forEach(d => b.delete(d.ref));
+    await b.commit();
+  }
+
+  // Remove meses expirados da janela (assíncrono, não bloqueia o feedback)
+  (async () => {
+    const snapMeta = await db.collection('historico_recente_meta').get();
+    for (const doc of snapMeta.docs) {
+      if (!mesesValidos.has(doc.id)) {
+        let snap = await db.collection('historico_recente')
+          .where('mesAno', '==', doc.id).limit(500).get();
+        while (snap.size > 0) {
+          const b = db.batch(); snap.docs.forEach(d => b.delete(d.ref)); await b.commit();
+          snap = await db.collection('historico_recente').where('mesAno','==',doc.id).limit(500).get();
+        }
+        await db.collection('historico_recente_meta').doc(doc.id).delete();
+      }
+    }
+  })();
+
+  // Meta
   await db.collection('historico_recente_meta').doc(mesAtual).set({
     mesAno: mesAtual, arquivo: file.name,
     totalRegistros: rows.length,
-    totalAtivas: docsVisaoAtual.length,
-    totalFinalizadas: docsRecente.length - docsVisaoAtual.length,
-    atualizadoEm: new Date().toISOString()
+    totalAtivas: docsAtivas.length,
+    totalFinalizadas: docsRecente.length - docsAtivas.length,
+    atualizadoEm: uploadTs
   });
 
   setStatus('status-atual',
-    `✅ ${docsVisaoAtual.length} ativas + ${docsRecente.length - docsVisaoAtual.length} finalizadas salvas!`,
+    `✅ ${docsAtivas.length} ativas + ${docsRecente.length - docsAtivas.length} finalizadas!`,
     'success');
 }
+
 
 // ============================================================
 // BIND DOS INPUTS
