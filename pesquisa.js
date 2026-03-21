@@ -1,5 +1,36 @@
 // js/pesquisa.js
 
+// Cópia local das causas improcedentes (sincronizada com causas-improcedentes.js)
+const _CAUSAS_IMP_NORM = [
+  "ACESSO IMPEDIDO","DISJUNTOR BT CLIENTE DESARMADO",
+  "DISJUNTOR MT GRUPO A DESARMADO","ENCONTRADO ENERGIA CORTADA CLIENTE",
+  "ENCONTRADO NORMAL UC","ENDERECO NAO LOCALIZADO",
+  "ILUMINACAO PUBLICA COM DEFEITO","INSTALACAO APOS MEDICAO COM DEFEITO CLIENTE",
+  "PORTEIRA TRANCADA","REDE TELEFONICA TV A CABO"
+];
+const _CAUSAS_KW = [
+  ["INSTALAC","APOS","MEDIC","DEFEITO","CLIENTE"],
+  ["ILUMINAC","PUBLICA"],["ENCONTRADO","NORMAL"],
+  ["ENCONTRADO","ENERGIA","CORTADA"],["ACESSO","IMPEDIDO"],
+  ["DISJUNTOR","DESARMADO"],["ENDERECO","NAO","LOCALIZADO"],
+  ["PORTEIRA","TRANCADA"],["REDE","TELEFON"]
+];
+function _norm(s) {
+  if (!s) return '';
+  let r = String(s).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  r = r.replace(/[^A-Z0-9]+/g, ' ');
+  return r.trim().replace(/\s+/g, ' ');
+}
+function _isProcedente(causa) {
+  const c = _norm(causa);
+  if (!c || c === '----') return false;
+  if (_CAUSAS_IMP_NORM.some(i => c === i || c.includes(i) || i.includes(c))) return false;
+  if (_CAUSAS_KW.some(kws => kws.every(kw => c.includes(kw)))) return false;
+  return true;
+}
+
+
+
 function fmtDate(iso) {
   if (!iso) return '----';
   return new Date(iso).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -36,12 +67,31 @@ function renderGantt(historico) {
   }
 
   // Marcadores + dias entre eles
+  // Azul = 1º atendimento ou atendimento anterior improcedente/fora dos 90 dias
+  // Vermelho = atendimento anterior foi PROCEDENTE e concluído dentro dos 90 dias (retrabalho)
   const markers = sorted.map((h, i) => {
     const pos      = ((new Date(h.dataOrigem) - minDate) / totalMs * 100).toFixed(2);
-    const isRet    = calcRetrabalho(h.dataConc);
-    const color    = isRet && i < sorted.length - 1 ? 'var(--eq-red)' : 'var(--eq-blue)';
     const num      = i + 1;
     const causaTip = (h.causa||'----').substring(0,45) + ((h.causa||'').length>45?'…':'');
+
+    // Determina se este atendimento é retrabalho:
+    // Varre para trás buscando o último atendimento PROCEDENTE anterior.
+    // Se este atendimento caiu dentro dos 90 dias da conclusão desse procedente → retrabalho.
+    // A janela anda: cada novo procedente vira a nova referência dos 90 dias.
+    let isRetrabalho = false;
+    if (i > 0) {
+      const currInicio = new Date(h.dataOrigem);
+      for (let j = i - 1; j >= 0; j--) {
+        const ant = sorted[j];
+        if (_isProcedente(ant.causa) && ant.dataConc) {
+          const janela90fim = new Date(new Date(ant.dataConc).getTime() + 90 * 86400000);
+          isRetrabalho = currInicio <= janela90fim;
+          break; // para no último procedente encontrado
+        }
+      }
+    }
+    const label = i === 0 ? '1º Atendimento' : (isRetrabalho ? 'Retrabalho' : 'Atendimento');
+    const color = isRetrabalho ? 'var(--eq-red)' : 'var(--eq-blue)';
 
     // Dias entre este e o próximo marcador
     let diasBadge = '';
@@ -60,7 +110,7 @@ function renderGantt(historico) {
         <div class="tl-dot" style="background:${color};border-color:${color}">
           <span class="tl-dot-num">${num}</span>
           <div class="tl-tooltip">
-            <div class="tl-tooltip-num">Atendimento ${num}</div>
+            <div class="tl-tooltip-num">${label} ${num}</div>
             <div class="tl-tooltip-os">${h.os||'----'}</div>
             <div class="tl-tooltip-row">📋 ${causaTip}</div>
             <div class="tl-tooltip-row">▶ ${fmtDate(h.dataOrigem)}</div>
@@ -86,17 +136,7 @@ function renderGantt(historico) {
         <!-- Eixo de datas -->
         <div class="gantt-axis" style="margin-top:8px">${ticksHtml}</div>
       </div>
-      <div style="margin-top:16px;display:flex;gap:20px;font-size:0.75rem;color:var(--eq-gray-600);flex-wrap:wrap">
-        <span style="display:flex;align-items:center;gap:6px">
-          <span style="width:12px;height:12px;border-radius:50%;background:var(--eq-blue);display:inline-block"></span>
-          Atendimento
-        </span>
-        <span style="display:flex;align-items:center;gap:6px">
-          <span style="width:12px;height:12px;border-radius:50%;background:var(--eq-red);display:inline-block"></span>
-          Em período de retrabalho
-        </span>
-        <span style="font-size:0.72rem;color:var(--eq-gray-400)">Passe o mouse sobre cada marcador para ver os detalhes</span>
-      </div>
+
     </div>`;
 }
 
@@ -116,16 +156,48 @@ function renderHistoricoTable(historico) {
       const dias = Math.round((curr - prev) / 86400000);
       diasDesde = `<span class="dias-entre-badge">${dias}d após atend. ${i}</span>`;
     }
+    const proc = _isProcedente(h.causa);
+
+    // Determina se este atendimento é retrabalho (mesma lógica do Gantt)
+    let isRet = false;
+    if (i > 0) {
+      const currInicio = new Date(h.dataOrigem);
+      for (let j = i - 1; j >= 0; j--) {
+        const ant = sorted[j];
+        if (_isProcedente(ant.causa) && ant.dataConc) {
+          const janela = new Date(new Date(ant.dataConc).getTime() + 90 * 86400000);
+          isRet = currInicio <= janela;
+          break;
+        }
+      }
+    }
+
+    // Cor da linha e badge
+    let rowClass = '';
+    let badgeLabel = '';
+    if (!proc) {
+      rowClass = 'row-improcedente';
+      badgeLabel = `<span class="badge-improcedente" style="font-size:0.68rem">✗ Improcedente</span>`;
+    } else if (isRet) {
+      rowClass = 'row-retrabalho';
+      badgeLabel = `<span class="badge-retrabalho" style="font-size:0.68rem">↩ Retrabalho</span>`;
+    } else {
+      rowClass = 'row-primeiro';
+      badgeLabel = i === 0
+        ? `<span class="badge-primeiro" style="font-size:0.68rem">1º Atend.</span>`
+        : `<span class="badge-procedente" style="font-size:0.68rem">✓ Procedente</span>`;
+    }
+
     return `
-      <tr>
+      <tr class="${rowClass}">
         <td>
-          <span class="atend-num-badge">${i+1}</span>
+          <span class="atend-num-badge" style="background:${!proc?'var(--eq-gray-400)':isRet?'var(--eq-red)':'var(--eq-blue)'}">${i+1}</span>
         </td>
         <td><strong>${h.os||'----'}</strong></td>
         <td>${fmtDate(h.dataOrigem)}</td>
         <td>${fmtDate(h.dataConc)}</td>
         <td>${h.prefixo||'----'}</td>
-        <td>${h.causa||'----'}</td>
+        <td>${h.causa||'----'} ${badgeLabel}</td>
         <td>${diasDesde}</td>
       </tr>`;
   }).join('');

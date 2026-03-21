@@ -1,38 +1,64 @@
 // js/causas-improcedentes.js
 // Lista centralizada de causas improcedentes — usada em todos os módulos
 
-const CAUSAS_IMPROCEDENTES = [
+// Causas improcedentes normalizadas (sem acentos, só alfanumérico+espaço)
+const CAUSAS_IMPROCEDENTES_NORM = [
   "ACESSO IMPEDIDO",
-  "DISJUNTOR BT - CLIENTE DESARMADO",
-  "DISJUNTOR MT –GRUPO A- DESARMADO",
-  "DISJUNTOR MT - GRUPO A- DESARMADO",
-  "ENCONTRADO ENERGIA CORTADA - CLIENTE",
-  "ENCONTRADO ENERGIA CORTADA -  CLIENTE",
-  "ENCONTRADO NORMAL - UC",
-  "ENCONTRADO NORMAL -  UC",
+  "DISJUNTOR BT CLIENTE DESARMADO",
+  "DISJUNTOR MT GRUPO A DESARMADO",
+  "ENCONTRADO ENERGIA CORTADA CLIENTE",
+  "ENCONTRADO NORMAL UC",
   "ENDERECO NAO LOCALIZADO",
-  "ENDEREÇO NAO LOCALIZADO",
-  "ILUMINAÇAO PUBLICA COM DEFEITO",
-  "ILUMINAÇAO PUBLICA  COM DEFEITO",
-  "INSTALAÇÃO APÓS MEDIÇÃO COM DEFEITO - CLIENTE",
+  "ILUMINACAO PUBLICA COM DEFEITO",
+  "INSTALACAO APOS MEDICAO COM DEFEITO CLIENTE",
   "PORTEIRA TRANCADA",
-  "REDE TELEFÔNICA/TV A CABO"
+  "REDE TELEFONICA TV A CABO"
 ];
 
+// Palavras-chave para casos com encoding corrompido (ex: Ç→? ou C?)
+// Se a causa contiver TODAS as palavras de um conjunto, é improcedente
+const CAUSAS_KEYWORDS = [
+  ["INSTALAC", "APOS", "MEDIC", "DEFEITO", "CLIENTE"],
+  ["ILUMINAC", "PUBLICA"],
+  ["ILUMINAC", "PUBLICA", "DEFEITO"],
+  ["ENCONTRADO", "NORMAL"],
+  ["ENCONTRADO", "ENERGIA", "CORTADA"],
+  ["ACESSO", "IMPEDIDO"],
+  ["DISJUNTOR", "DESARMADO"],
+  ["ENDERECO", "NAO", "LOCALIZADO"],
+  ["PORTEIRA", "TRANCADA"],
+  ["REDE", "TELEFON"]
+];
+
+function normCausa(s) {
+  if (!s) return '';
+  let r = String(s).toUpperCase();
+  // Remove acentos
+  r = r.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // Qualquer não-alfanumérico vira espaço
+  r = r.replace(/[^A-Z0-9]+/g, ' ');
+  return r.trim().replace(/\s+/g, ' ');
+}
+
 function isProcedente(causa) {
-  if (!causa) return false;
-  const c = causa.trim().toUpperCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, ''); // remove acentos para comparar
-  return !CAUSAS_IMPROCEDENTES.some(imp => {
-    const i = imp.toUpperCase()
-      .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    return c.includes(i) || i.includes(c);
-  });
+  const c = normCausa(causa);
+  if (!c || c === '----') return false;
+
+  // 1. Comparação direta normalizada
+  if (CAUSAS_IMPROCEDENTES_NORM.some(imp => c === imp || c.includes(imp) || imp.includes(c))) {
+    return false;
+  }
+
+  // 2. Fallback por palavras-chave (para casos com encoding corrompido)
+  if (CAUSAS_KEYWORDS.some(keywords => keywords.every(kw => c.includes(kw)))) {
+    return false;
+  }
+
+  return true;
 }
 
 function badgeProcedencia(causa) {
-  const proc = isProcedente(causa);
-  return proc
+  return isProcedente(causa)
     ? `<span class="badge badge-procedente">✓ Procedente</span>`
     : `<span class="badge badge-improcedente">✗ Improcedente</span>`;
 }
