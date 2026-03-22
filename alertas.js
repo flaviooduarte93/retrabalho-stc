@@ -58,7 +58,15 @@ function renderRetrabalho(el){
       <div class="alert-body">
         <div class="alert-uc"><a href="pesquisa.html?uc=${encodeURIComponent(o.uc)}&from=alertas" style="color:var(--eq-blue-dark);text-decoration:none;font-weight:700">UC ${o.uc}</a></div>
         <div class="alert-detail">${o.ponto_eletrico||o.uc}${eq} · ${fmtDate(o.dt_inicio)}</div>
-        <div style="margin-top:6px">${badgeProcedencia(o.causa_historico)}</div>
+        <div class="alert-detail" style="margin-top:4px">
+          🕐 Último atend. concluído: <strong>${fmtDate(o._hist?.data_conc||o.data_conc)}</strong>
+          · OS: <strong>${o._hist?.ultima_os||'----'}</strong>
+          · Equipe: <strong>${o._hist?.prefixo||'----'}</strong>
+        </div>
+        <div class="alert-detail" style="margin-top:2px">
+          Causa: <strong>${o.causa_historico||'----'}</strong>
+          &nbsp;${badgeProcedencia(o.causa_historico)}
+        </div>
       </div>
       <div class="alert-badges">
         <span class="badge ${estadoBadge(o.estado)}">${o.estado||'----'}</span>
@@ -195,7 +203,7 @@ async function carregarAlertas(){
       { data: recenteProc }
     ] = await Promise.all([
       db.from('visao_atual').select('*'),
-      db.from('historico').select('uc,ultima_os,data_conc,prefixo,causa,qtd_atendimentos,historico'),
+      db.from('historico').select('uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico'),
       db.from('historico_recente')
         .select('uc,ocorrencia,dt_fim,causa,procedente')
         .eq('finalizado', true)
@@ -206,8 +214,10 @@ async function carregarAlertas(){
     const historicoMap = {};
     (histData||[]).forEach(h => { historicoMap[h.uc] = h; });
 
-    // Classifica alertas
-    const comRetrabalho = (ativas||[]).filter(o => o.em_historico);
+    // Classifica alertas — enriquece retrabalho com dados do histórico
+    const comRetrabalho = (ativas||[])
+      .filter(o => o.em_historico)
+      .map(o => ({ ...o, _hist: historicoMap[o.uc] || null }));
     const ucsComAlerta  = new Set(comRetrabalho.map(o => o.uc));
 
     // Mapa de F-FINALIZADA procedentes por UC (histórico recente)
