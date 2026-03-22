@@ -82,24 +82,52 @@ async function processHistorico(file) {
     for (const r of registros) {
       const osAtual  = String(r['OS']||'').trim();
       const osOrigem = String(r['OS_ORIGEM']||'').trim();
+      // Função de deduplicação: extrai número final da OS + mês/ano da data
+      // Ex: "2026-3-6489" com data em março/2026 → chave "2026-03-6489"
+      //     "6489"        com data em março/2026 → chave "2026-03-6489" (mesmo!)
+      function chaveOS(osStr, dataStr) {
+        const num = String(osStr||'').trim().replace(/^\d{4}-\d+-/, ''); // pega só o número final
+        if (!dataStr) return osStr; // sem data, usa OS completa como fallback
+        const d = new Date(dataStr);
+        if (isNaN(d)) return osStr;
+        const mesAno = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        return `${mesAno}-${num}`;
+      }
+
+      function duracao(rec) {
+        if (!rec.data_origem || !rec.data_conc) return 0;
+        return new Date(rec.data_conc) - new Date(rec.data_origem);
+      }
+
+      function setOsMap(key, rec) {
+        // Se já existe, mantém a de maior duração
+        if (!osMap[key] || duracao(rec) > duracao(osMap[key])) {
+          osMap[key] = rec;
+        }
+      }
+
       if (osOrigem) {
-        osMap[osOrigem] = {
+        const dtOrig = parseDate(r['DATA_ORIGEM_1º ATEND.'])?.toISOString()||null;
+        const rec = {
           os: osOrigem,
-          data_origem: parseDate(r['DATA_ORIGEM_1º ATEND.'])?.toISOString()||null,
+          data_origem: dtOrig,
           data_conc:   parseDate(r['DATA_CONCLUSAO_1º ATEND.'])?.toISOString()||null,
           prefixo: String(r['PREFIXO_ORIGEM']||'')||'----',
           causa:   limparTexto(String(r['TIPO_CONCLUSAO_ORIGEM']||''))||'----',
         };
+        setOsMap(chaveOS(osOrigem, dtOrig), rec);
       }
       if (osAtual && !osQueEhOrigem.has(osAtual)) {
         const causaFinal = limparTexto(String(r['TIPO_CONCLUSAO']||r['TIPO_CONCLUSAO_ORIGEM']||''))||'----';
-        osMap[osAtual] = {
+        const dtAtual = parseDate(r['DATA_ORIGEM'])?.toISOString()||null;
+        const rec = {
           os: osAtual,
-          data_origem: parseDate(r['DATA_ORIGEM'])?.toISOString()||null,
+          data_origem: dtAtual,
           data_conc:   parseDate(r['OCO_DATA_CONCLUSAO'])?.toISOString()||null,
           prefixo: String(r['PREFIXO']||'')||'----',
           causa:   causaFinal,
         };
+        setOsMap(chaveOS(osAtual, dtAtual), rec);
       }
     }
 
