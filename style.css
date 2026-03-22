@@ -1353,3 +1353,37 @@ body {
   padding: 2px 8px; border-radius: 20px;
   font-weight: 700;
 }
+
+/* ===== TABELA DE ATENDIMENTOS — RESPONSIVA SEM QUEBRAS ===== */
+.historico-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.historico-table {
+  min-width: 750px;
+  white-space: nowrap;
+}
+.historico-table td,
+.historico-table th {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 260px;
+}
+/* Coluna causa pode ser um pouco maior */
+.historico-table td:nth-child(6),
+.historico-table th:nth-child(6) {
+  max-width: 320px;
+}
+/* Badges dentro da célula de causa ficam inline */
+.historico-table td:nth-child(6) {
+  white-space: nowrap;
+}
+.historico-table td:nth-child(6) .badge-retrabalho,
+.historico-table td:nth-child(6) .badge-procedente,
+.historico-table td:nth-child(6) .badge-improcedente,
+.historico-table td:nth-child(6) .badge-primeiro {
+  vertical-align: middle;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
