@@ -76,7 +76,9 @@ async function processarPlanilhaRecente(file, idx, total) {
     const municipio  = String(row['Município']||'').trim();
     const causaFinal = limparTexto(String(row['Causa']||row['Motivo']||'').trim());
     const ucMatch    = pe.match(/^(.+?)\s+-\s/);
-    const uc         = sanitizeId(ucMatch ? ucMatch[1].trim() : pe.split(' -')[0].trim());
+    const ucRaw      = ucMatch ? ucMatch[1].trim() : pe.split(' -')[0].trim();
+    if (/[a-zA-Z]/.test(ucRaw)) continue; // ignora equipamentos não-numéricos
+    const uc         = sanitizeId(ucRaw);
     const finalizado = estado.toUpperCase().includes('FINALIZADA');
     const ativo      = !finalizado && ESTADOS_ATIVOS.some(e => estado.toUpperCase().includes(e));
 
