@@ -220,6 +220,11 @@ async function processAtual(file) {
     const uc = sanitizeId(m ? m[1].trim() : pe.split(' -')[0].trim());
     const h  = historicoMap[uc];
 
+    // em_historico só é true se UC está no histórico E ainda dentro dos 90 dias
+    const dentroJanela90 = h?.data_conc
+      ? new Date() <= new Date(new Date(h.data_conc).getTime() + 91*86400000)
+      : false;
+
     docs.push({
       ocorrencia: sanitizeId(ocorrencia),
       estado, ponto_eletrico: pe, uc,
@@ -227,7 +232,7 @@ async function processAtual(file) {
       dt_inicio:       dtInicio ? dtInicio.toISOString() : null,
       dt_fim:          dtFim    ? dtFim.toISOString()    : null,
       causa, seccional, municipio,
-      em_historico:    !!h,
+      em_historico:    !!h && dentroJanela90,
       qtd_atendimentos: h ? (h.qtd_atendimentos||1) : 0,
       data_conc:        h ? (h.data_conc||null)     : null,
       causa_historico:  h ? (h.causa||'----')       : '----',
