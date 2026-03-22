@@ -55,28 +55,9 @@ function renderTabela(historico){
     return `<tr class="${rowClass}" data-tipo="${tipo}"><td><span class="atend-num-badge" style="background:${numColor}">${i+1}</span></td><td><strong>${h.os||'----'}</strong></td><td>${fmtDate(h.data_origem)}</td><td>${fmtDate(h.data_conc)}</td><td>${h.prefixo||'----'}</td><td>${h.causa||'----'}</td><td><span class="tipo-badge tipo-${tipo}">${tipoLabel}</span></td><td>${diasDesde}</td></tr>`;
   }).join('');
 
-  // Legenda dinâmica baseada nos tipos presentes
-  const tiposPresentes=[...new Set(sorted.map((_,i)=>{
-    const h=sorted[i];
-    const ativa=!h.data_conc;
-    const proc=ativa?true:_isProcedente(h.causa);
-    let isRet=false;
-    if(i>0&&!ativa){const curr=new Date(h.data_origem);for(let j=i-1;j>=0;j--){const ant=sorted[j];if(_isProcedente(ant.causa)&&ant.data_conc){isRet=curr<=new Date(new Date(ant.data_conc).getTime()+90*86400000);break;}}}
-    return ativa?'ativa':!proc?'improcedente':isRet?'retrabalho':i===0?'primeiro':'procedente';
-  }))];
-  const legendaMap={
-    'primeiro':   {color:'var(--eq-blue)',       label:'1º Atendimento'},
-    'procedente': {color:'var(--eq-blue)',        label:'Procedente'},
-    'retrabalho': {color:'var(--eq-red)',         label:'Retrabalho'},
-    'improcedente':{color:'var(--eq-gray-400)',   label:'Improcedente'},
-    'ativa':      {color:'var(--eq-blue-mid)',    label:'Ocorrência Ativa'},
-  };
-  const legenda=tiposPresentes.map(t=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:.75rem;color:var(--eq-gray-700)"><span style="width:10px;height:10px;border-radius:50%;background:${legendaMap[t].color};display:inline-block"></span>${legendaMap[t].label}</span>`).join('');
-
   return `<div style="margin-top:24px">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+    <div style="margin-bottom:12px">
       <div class="gantt-title" style="margin-bottom:0">Todos os Atendimentos</div>
-      <div style="display:flex;gap:12px;flex-wrap:wrap">${legenda}</div>
     </div>
     <div class="historico-table-wrap"><table class="historico-table"><thead><tr>
       <th style="width:40px">#</th><th>OS</th><th>Data Início</th><th>Data Fim</th><th>Equipe</th><th>Causa</th><th>Tipo</th><th>Intervalo</th>
