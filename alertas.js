@@ -249,29 +249,9 @@ async function carregarAlertas(){
 
     renderVisao();
 
-    // Seção histórico 90 dias
-    document.getElementById('historico-container').innerHTML=`
-      <div class="section-head" style="margin-top:48px">
-        <div class="section-count blue">${_ucsSemAlerta.length}</div>
-        <h2>📅 UCs em Retrabalho sem Ocorrência Ativa</h2>
-      </div>
-      <p style="font-size:.83rem;color:var(--eq-gray-600);margin-bottom:16px">Clique para expandir o histórico.</p>
-      <div class="historico-toolbar">
-        <div class="filtro-uc-wrap">
-          <svg class="filtro-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><line x1="11" y1="11" x2="15" y2="15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          <input id="filtro-uc" type="text" class="filtro-uc-input" placeholder="Buscar UC..." oninput="filtrarUC(this.value)" autocomplete="off"/>
-          <button class="filtro-clear" id="filtro-clear" onclick="limparFiltro()" style="display:none">✕</button>
-          <span class="filtro-count" id="filtro-count"></span>
-        </div>
-        <div class="sort-group">
-          <span class="sort-label">Ordenar:</span>
-          <button id="sort-menor-tempo" class="sort-btn sort-btn--active" onclick="ordenarLista('menor-tempo')">⏱ Menor tempo</button>
-          <button id="sort-maior-tempo" class="sort-btn" onclick="ordenarLista('maior-tempo')">📅 Maior tempo</button>
-          <button id="sort-mais-atend" class="sort-btn" onclick="ordenarLista('mais-atend')">🔁 Mais atendimentos</button>
-        </div>
-      </div>
-      <div class="dropdown-list"></div>`;
-    aplicarFiltroOrdem();
+    // Seção de UCs sem alerta foi movida para a página de Detalhamento
+    const el = document.getElementById('historico-container');
+    if (el) el.innerHTML = '';
 
   } catch(err) {
     console.error(err);
