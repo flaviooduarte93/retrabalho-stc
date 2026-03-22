@@ -190,7 +190,9 @@ async function processAtual(file) {
   for (const row of rows) {
     const pe = String(row['Ponto Elétrico']||'').trim();
     const m  = pe.match(/^(.+?)\s+-\s/);
-    ucsSet.add(sanitizeId(m ? m[1].trim() : pe.split(' -')[0].trim()));
+    const ucRaw0 = m ? m[1].trim() : pe.split(' -')[0].trim();
+    if (/[a-zA-Z]/.test(ucRaw0)) continue;
+    ucsSet.add(sanitizeId(ucRaw0));
   }
   const ucsArr = [...ucsSet];
 
@@ -217,7 +219,10 @@ async function processAtual(file) {
     const municipio = String(row['Município']||'').trim();
     const causa     = limparTexto(String(row['Causa']||row['Motivo']||'').trim());
     const m  = pe.match(/^(.+?)\s+-\s/);
-    const uc = sanitizeId(m ? m[1].trim() : pe.split(' -')[0].trim());
+    const ucRaw = m ? m[1].trim() : pe.split(' -')[0].trim();
+    // UC válida é numérica pura — ignora equipamentos (TR..., GN..., etc.)
+    const uc = /[a-zA-Z]/.test(ucRaw) ? null : sanitizeId(ucRaw);
+    if (!uc) continue; // descarta registros com UC não-numérica
     const h  = historicoMap[uc];
 
     // em_historico só é true se UC está no histórico E ainda dentro dos 90 dias
