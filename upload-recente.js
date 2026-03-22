@@ -44,38 +44,29 @@ async function limparMesesAntigos() {
   const hoje = new Date();
   const mesAtual = mesAnoKey(hoje);
 
-  // Calcula os 3 meses fechados anteriores válidos
   const mesesValidos = new Set([mesAtual]);
   for (let i = 1; i <= 3; i++) {
     const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
     mesesValidos.add(mesAnoKey(d));
   }
 
-  // Busca todos os documentos de controle de meses
   const snap = await db.collection('historico_recente_meta').get();
-  const mesesSalvos = [];
-  snap.forEach(doc => mesesSalvos.push(doc.id));
+  const mesesExpirados = snap.docs.map(d => d.id).filter(id => !mesesValidos.has(id));
 
-  // Deleta meses fora da janela
-  for (const mes of mesesSalvos) {
-    if (!mesesValidos.has(mes)) {
-      // Deleta ocorrências desse mês
-      const ocSnap = await db.collection('historico_recente')
-        .where('mesAno', '==', mes).limit(500).get();
-      let docs = ocSnap.docs.map(d => d.ref);
-      while (docs.length) {
-        const batch = db.batch();
-        docs.splice(0, 400).forEach(ref => batch.delete(ref));
-        await batch.commit();
-        const next = await db.collection('historico_recente')
-          .where('mesAno', '==', mes).limit(500).get();
-        docs = next.docs.map(d => d.ref);
+  // Deleta meses expirados em paralelo
+  await Promise.all(mesesExpirados.map(async mes => {
+    const ocSnap = await db.collection('historico_recente').where('mesAno', '==', mes).get();
+    if (!ocSnap.empty) {
+      const ps = [], refs = ocSnap.docs.map(d => d.ref);
+      for (let i = 0; i < refs.length; i += 400) {
+        const b = db.batch();
+        refs.slice(i, i+400).forEach(r => b.delete(r));
+        ps.push(b.commit());
       }
-      // Deleta o meta
-      await db.collection('historico_recente_meta').doc(mes).delete();
-      console.log(`Mês ${mes} removido da janela`);
+      await Promise.all(ps);
     }
-  }
+    await db.collection('historico_recente_meta').doc(mes).delete();
+  }));
 
   return mesesValidos;
 }
@@ -124,16 +115,18 @@ async function processarPlanilhaRecente(file, fileIndex, totalFiles) {
   const hoje = new Date();
   const mesAtual = mesAnoKey(hoje);
   if (mesAno === mesAtual) {
+    // Apaga mês atual de uma vez com batches paralelos
     const existing = await db.collection('historico_recente')
-      .where('mesAno', '==', mesAno).limit(500).get();
-    let toDelete = existing.docs.map(d => d.ref);
-    while (toDelete.length) {
-      const batch = db.batch();
-      toDelete.splice(0, 400).forEach(ref => batch.delete(ref));
-      await batch.commit();
-      const next = await db.collection('historico_recente')
-        .where('mesAno', '==', mesAno).limit(500).get();
-      toDelete = next.docs.map(d => d.ref);
+      .where('mesAno', '==', mesAno).get();
+    if (!existing.empty) {
+      const ps = [];
+      const refs = existing.docs.map(d => d.ref);
+      for (let i = 0; i < refs.length; i += 400) {
+        const b = db.batch();
+        refs.slice(i, i+400).forEach(ref => b.delete(ref));
+        ps.push(b.commit());
+      }
+      await Promise.all(ps);
     }
   }
 

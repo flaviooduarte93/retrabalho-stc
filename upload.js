@@ -60,16 +60,18 @@ function setStatus(elId, msg, type) {
 }
 
 async function deleteCollection(colName) {
-  const BATCH_SIZE = 400;
-  let snap = await db.collection(colName).limit(500).get();
-  let toDelete = snap.docs.map(d => d.ref);
-  while (toDelete.length) {
+  // Busca todos os docs de uma vez (mais eficiente para coleções pequenas)
+  // e deleta em batches paralelos
+  const snap = await db.collection(colName).get();
+  if (snap.empty) return;
+  const refs = snap.docs.map(d => d.ref);
+  const promises = [];
+  for (let i = 0; i < refs.length; i += 400) {
     const batch = db.batch();
-    toDelete.splice(0, BATCH_SIZE).forEach(ref => batch.delete(ref));
-    await batch.commit();
-    const next = await db.collection(colName).limit(500).get();
-    toDelete = next.docs.map(d => d.ref);
+    refs.slice(i, i + 400).forEach(ref => batch.delete(ref));
+    promises.push(batch.commit());
   }
+  await Promise.all(promises);
 }
 
 // ============================================================
@@ -309,14 +311,8 @@ async function processAtual(file) {
 
   setStatus('status-atual', `⏳ Salvando ${docsAtivas.length} ocorrências...`, 'loading');
 
-  // Apaga visao_atual e regrava em paralelo
-  await Promise.all([
-    deleteCollection('visao_atual'),
-    // Pré-processa os batches enquanto a deleção acontece
-    Promise.resolve(docsAtivas)
-  ]);
-
-  // Grava nova visao_atual
+  // Apaga visao_atual antiga e grava nova
+  await deleteCollection('visao_atual');
   for (let i = 0; i < docsAtivas.length; i += 400) {
     const b = db.batch();
     docsAtivas.slice(i, i+400).forEach(doc => {
