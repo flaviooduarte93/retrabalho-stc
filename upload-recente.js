@@ -65,8 +65,10 @@ async function processarPlanilhaRecente(file, idx, total) {
 
   // Prepara e insere em lotes
   setStatusRecente(`⏳ Salvando ${dataRows.length} registros de ${mesAno}...`, 'loading');
-  const docs = dataRows.map(row => {
+  const docs = [];
+  for (const row of dataRows) {
     const ocorrencia = String(row['Número']||'').trim();
+    if (!ocorrencia) continue;
     const estado     = String(row['Estado']||'').trim();
     const pe         = String(row['Ponto Elétrico']||'').trim();
     const equipe     = String(row['Equipe']||'').trim();
@@ -77,23 +79,22 @@ async function processarPlanilhaRecente(file, idx, total) {
     const causaFinal = limparTexto(String(row['Causa']||row['Motivo']||'').trim());
     const ucMatch    = pe.match(/^(.+?)\s+-\s/);
     const ucRaw      = ucMatch ? ucMatch[1].trim() : pe.split(' -')[0].trim();
-    if (/[a-zA-Z]/.test(ucRaw)) continue; // ignora equipamentos não-numéricos
+    if (/[a-zA-Z]/.test(ucRaw)) continue; // ignora equipamentos não-numéricos (TR..., GN...)
     const uc         = sanitizeId(ucRaw);
     const finalizado = estado.toUpperCase().includes('FINALIZADA');
     const ativo      = !finalizado && ESTADOS_ATIVOS.some(e => estado.toUpperCase().includes(e));
-
-    return {
-      id:             sanitizeId(`${mesAno}_${ocorrencia}`),
-      ocorrencia:     sanitizeId(ocorrencia),
+    docs.push({
+      id:        sanitizeId(`${mesAno}_${ocorrencia}`),
+      ocorrencia: sanitizeId(ocorrencia),
       estado, ponto_eletrico: pe, uc,
-      equipe:   equipe   ||'----',
+      equipe:    equipe   ||'----',
       dt_inicio: dtInicio ? dtInicio.toISOString() : null,
       dt_fim:    dtFim    ? dtFim.toISOString()    : null,
       causa: causaFinal, seccional, municipio,
       mes_ano: mesAno, finalizado, ativo,
       procedente: isProcedente(causaFinal)
-    };
-  }).filter(d => d.ocorrencia && d.ocorrencia !== '----');
+    });
+  }
 
   // Upsert em lotes de 800
   for (let i = 0; i < docs.length; i += 800) {
