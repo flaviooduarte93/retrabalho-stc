@@ -74,15 +74,25 @@ async function pesquisarUC(uc){
   try {
     const ucSanitized = uc.replace(/[\/\s]+/g,'_').trim();
 
-    const [
-      {data:histDoc},
-      {data:recenteDocs},
-      {data:ativasDocs}
-    ] = await Promise.all([
-      db.from('historico').select('*').eq('uc', ucSanitized).maybeSingle(),
-      db.from('historico_recente').select('*').eq('uc', ucSanitized),
-      db.from('visao_atual').select('*').eq('uc', ucSanitized)
-    ]);
+    // Tenta encontrar a UC com diferentes variações do ID
+    // (pode ter sido sanitizado de formas diferentes no upload)
+    const ucVariants = [...new Set([ucSanitized, uc.trim()])];
+
+    // Busca em paralelo todas as variações
+    let histDoc = null, recenteDocs = [], ativasDocs = [];
+    for (const ucVar of ucVariants) {
+      const [h, r, a] = await Promise.all([
+        db.from('historico').select('*').eq('uc', ucVar).maybeSingle(),
+        db.from('historico_recente').select('*').eq('uc', ucVar),
+        db.from('visao_atual').select('*').eq('uc', ucVar)
+      ]);
+      if (h.data && !histDoc) histDoc = h.data;
+      if (r.data?.length) recenteDocs = [...recenteDocs, ...r.data];
+      if (a.data?.length) ativasDocs = [...ativasDocs, ...a.data];
+    }
+    // Remove duplicatas por ocorrencia/id
+    recenteDocs = recenteDocs.filter((r,i,arr)=>arr.findIndex(x=>x.id===r.id)===i);
+    ativasDocs  = ativasDocs.filter((a,i,arr)=>arr.findIndex(x=>x.ocorrencia===a.ocorrencia)===i);
 
     if(!histDoc && !recenteDocs?.length && !ativasDocs?.length){
       res.innerHTML=`<div class="no-results"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="28" stroke="#C8D6E5" stroke-width="2"/><path d="M20 30h20M30 20v20" stroke="#C8D6E5" stroke-width="2" stroke-linecap="round"/></svg><p>UC <strong>${uc}</strong> não encontrada em nenhuma base.</p></div>`;
