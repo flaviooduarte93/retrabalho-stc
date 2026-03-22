@@ -1,433 +1,167 @@
-// js/pesquisa.js
+// js/pesquisa.js — Supabase version
 
-// Cópia local das causas improcedentes (sincronizada com causas-improcedentes.js)
-const _CAUSAS_IMP_NORM = [
-  "ACESSO IMPEDIDO","DISJUNTOR BT CLIENTE DESARMADO",
-  "DISJUNTOR MT GRUPO A DESARMADO","ENCONTRADO ENERGIA CORTADA CLIENTE",
-  "ENCONTRADO NORMAL UC","ENDERECO NAO LOCALIZADO",
-  "ILUMINACAO PUBLICA COM DEFEITO","INSTALACAO APOS MEDICAO COM DEFEITO CLIENTE",
-  "PORTEIRA TRANCADA","REDE TELEFONICA TV A CABO"
-];
-const _CAUSAS_KW = [
-  ["INSTALAC","APOS","MEDIC","DEFEITO","CLIENTE"],
-  ["ILUMINAC","PUBLICA"],["ENCONTRADO","NORMAL"],
-  ["ENCONTRADO","ENERGIA","CORTADA"],["ACESSO","IMPEDIDO"],
-  ["DISJUNTOR","DESARMADO"],["ENDERECO","NAO","LOCALIZADO"],
-  ["PORTEIRA","TRANCADA"],["REDE","TELEFON"]
-];
-function _norm(s) {
-  if (!s) return '';
-  let r = String(s).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  r = r.replace(/[^A-Z0-9]+/g, ' ');
-  return r.trim().replace(/\s+/g, ' ');
-}
-function _isProcedente(causa) {
-  const c = _norm(causa);
-  if (!c || c === '----') return false;
-  if (_CAUSAS_IMP_NORM.some(i => c === i || c.includes(i) || i.includes(c))) return false;
-  if (_CAUSAS_KW.some(kws => kws.every(kw => c.includes(kw)))) return false;
-  return true;
-}
+// ===== CAUSAS IMPROCEDENTES (local) =====
+const _CAUSAS_IMP_NORM=['ACESSO IMPEDIDO','DISJUNTOR BT CLIENTE DESARMADO','DISJUNTOR MT GRUPO A DESARMADO','ENCONTRADO ENERGIA CORTADA CLIENTE','ENCONTRADO NORMAL UC','ENDERECO NAO LOCALIZADO','ILUMINACAO PUBLICA COM DEFEITO','INSTALACAO APOS MEDICAO COM DEFEITO CLIENTE','PORTEIRA TRANCADA','REDE TELEFONICA TV A CABO'];
+const _CAUSAS_KW=[['INSTALAC','APOS','MEDIC','DEFEITO','CLIENTE'],['ILUMINAC','PUBLICA'],['ENCONTRADO','NORMAL'],['ENCONTRADO','ENERGIA','CORTADA'],['ACESSO','IMPEDIDO'],['DISJUNTOR','DESARMADO'],['ENDERECO','NAO','LOCALIZADO'],['PORTEIRA','TRANCADA'],['REDE','TELEFON']];
+function _norm(s){if(!s)return'';let r=String(s).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');r=r.replace(/[^A-Z0-9]+/g,' ');return r.trim().replace(/\s+/g,' ');}
+function _isProcedente(causa){const c=_norm(causa);if(!c||c==='----')return false;if(_CAUSAS_IMP_NORM.some(i=>c===i||c.includes(i)||i.includes(c)))return false;if(_CAUSAS_KW.some(kws=>kws.every(kw=>c.includes(kw))))return false;return true;}
 
+function fmtDate(iso){if(!iso)return'----';return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
+function fmtDateShort(iso){if(!iso)return'----';return new Date(iso).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
+function calcRetrabalho(dc){if(!dc)return false;return new Date()<=new Date(new Date(dc).getTime()+91*86400000);}
 
+// ===== GANTT =====
+function renderGantt(historico){
+  if(!historico||!historico.length)return'';
+  const sorted=[...historico].filter(h=>h.data_origem||h.dataOrigem).map(h=>({...h,data_origem:h.data_origem||h.dataOrigem,data_conc:h.data_conc||h.dataConc})).sort((a,b)=>new Date(a.data_origem)-new Date(b.data_origem));
+  if(!sorted.length)return'';
+  const minDate=new Date(sorted[0].data_origem);
+  const maxDate=new Date(sorted[sorted.length-1].data_origem);
+  minDate.setDate(minDate.getDate()-7); maxDate.setDate(maxDate.getDate()+7);
+  const totalMs=maxDate-minDate||1;
+  const ticks=[];
+  for(let i=0;i<=5;i++) ticks.push(new Date(minDate.getTime()+totalMs*i/5).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}));
 
-function fmtDate(iso) {
-  if (!iso) return '----';
-  return new Date(iso).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-}
-function fmtDateShort(iso) {
-  if (!iso) return '----';
-  return new Date(iso).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric'});
-}
-function calcRetrabalho(dataConc) {
-  if (!dataConc) return false;
-  return new Date() <= new Date(new Date(dataConc).getTime() + 91 * 86400000);
-}
-
-// ===== GANTT — Linha do tempo com marcadores =====
-function renderGantt(historico) {
-  if (!historico || !historico.length) return '';
-  const sorted = [...historico].filter(h => h.dataOrigem)
-    .sort((a,b) => new Date(a.dataOrigem) - new Date(b.dataOrigem));
-  if (!sorted.length) return '';
-
-  const minDate = new Date(sorted[0].dataOrigem);
-  const maxDate = new Date(sorted[sorted.length-1].dataOrigem);
-
-  // Adiciona margem de 7 dias em cada lado para os marcadores não ficarem cortados
-  minDate.setDate(minDate.getDate() - 7);
-  maxDate.setDate(maxDate.getDate() + 7);
-  const totalMs = maxDate - minDate || 1;
-
-  // Ticks do eixo — 6 datas distribuídas
-  const ticks = [];
-  for (let i = 0; i <= 5; i++) {
-    ticks.push(new Date(minDate.getTime() + totalMs * i / 5)
-      .toLocaleDateString('pt-BR', {day:'2-digit', month:'2-digit'}));
-  }
-
-  // Marcadores + dias entre eles
-  // Azul = 1º atendimento ou atendimento anterior improcedente/fora dos 90 dias
-  // Vermelho = atendimento anterior foi PROCEDENTE e concluído dentro dos 90 dias (retrabalho)
-  const markers = sorted.map((h, i) => {
-    const pos      = ((new Date(h.dataOrigem) - minDate) / totalMs * 100).toFixed(2);
-    const num      = i + 1;
-    const causaTip = (h.causa||'----').substring(0,45) + ((h.causa||'').length>45?'…':'');
-
-    // Determina se este atendimento é retrabalho:
-    // Varre para trás buscando o último atendimento PROCEDENTE anterior.
-    // Se este atendimento caiu dentro dos 90 dias da conclusão desse procedente → retrabalho.
-    // A janela anda: cada novo procedente vira a nova referência dos 90 dias.
-    let isRetrabalho = false;
-    if (i > 0) {
-      const currInicio = new Date(h.dataOrigem);
-      for (let j = i - 1; j >= 0; j--) {
-        const ant = sorted[j];
-        if (_isProcedente(ant.causa) && ant.dataConc) {
-          const janela90fim = new Date(new Date(ant.dataConc).getTime() + 90 * 86400000);
-          isRetrabalho = currInicio <= janela90fim;
-          break; // para no último procedente encontrado
-        }
-      }
-    }
-    const label = i === 0 ? '1º Atendimento' : (isRetrabalho ? 'Retrabalho' : 'Atendimento');
-    const color = isRetrabalho ? 'var(--eq-red)' : 'var(--eq-blue)';
-
-    // Dias entre este e o próximo marcador
-    let diasBadge = '';
-    if (i < sorted.length - 1) {
-      const proxData = new Date(sorted[i+1].dataOrigem);
-      const dias = Math.round((proxData - new Date(h.dataOrigem)) / 86400000);
-      const midPos = (
-        ((new Date(h.dataOrigem) - minDate) / totalMs * 100 +
-         (proxData - minDate) / totalMs * 100) / 2
-      ).toFixed(2);
-      diasBadge = `<div class="tl-dias-badge" style="left:${midPos}%">${dias}d</div>`;
-    }
-
-    return `
-      <div class="tl-marker-wrap" style="left:${pos}%">
-        <div class="tl-dot" style="background:${color};border-color:${color}">
-          <span class="tl-dot-num">${num}</span>
-          <div class="tl-tooltip">
-            <div class="tl-tooltip-num">${label} ${num}</div>
-            <div class="tl-tooltip-os">${h.os||'----'}</div>
-            <div class="tl-tooltip-row">📋 ${causaTip}</div>
-            <div class="tl-tooltip-row">▶ ${fmtDate(h.dataOrigem)}</div>
-            <div class="tl-tooltip-row">■ ${fmtDate(h.dataConc)}</div>
-          </div>
-        </div>
-      </div>
-      ${diasBadge}`;
+  const markers=sorted.map((h,i)=>{
+    const pos=((new Date(h.data_origem)-minDate)/totalMs*100).toFixed(2);
+    let isRet=false;
+    if(i>0){const curr=new Date(h.data_origem);for(let j=i-1;j>=0;j--){const ant=sorted[j];if(_isProcedente(ant.causa||ant.prefixo)&&(ant.data_conc||ant.dataConc)){const janela=new Date(new Date(ant.data_conc||ant.dataConc).getTime()+90*86400000);isRet=curr<=janela;break;}}}
+    const color=isRet?'var(--eq-red)':'var(--eq-blue)';
+    const causaTip=(h.causa||'----').substring(0,45)+((h.causa||'').length>45?'…':'');
+    let diasBadge='';
+    if(i<sorted.length-1){const next=new Date(sorted[i+1].data_origem);const dias=Math.round((next-new Date(h.data_origem))/86400000);const midPos=(((new Date(h.data_origem)-minDate)/totalMs*100+(next-minDate)/totalMs*100)/2).toFixed(2);diasBadge=`<div class="tl-dias-badge" style="left:${midPos}%">${dias}d</div>`;}
+    return `<div class="tl-marker-wrap" style="left:${pos}%"><div class="tl-dot" style="background:${color};border-color:${color}"><span class="tl-dot-num">${i+1}</span><div class="tl-tooltip"><div class="tl-tooltip-num">Atendimento ${i+1}</div><div class="tl-tooltip-os">${h.os||'----'}</div><div class="tl-tooltip-row">📋 ${causaTip}</div><div class="tl-tooltip-row">▶ ${fmtDate(h.data_origem)}</div><div class="tl-tooltip-row">■ ${fmtDate(h.data_conc)}</div></div></div></div>${diasBadge}`;
   }).join('');
 
-  const ticksHtml = ticks.map(t => `<div class="gantt-tick">${t}</div>`).join('');
-
-  return `
-    <div class="gantt-section">
-      <div class="gantt-title">Linha do Tempo de Atendimentos</div>
-      <div class="gantt-container">
-        <div class="tl-chart">
-          <!-- Linha central -->
-          <div class="tl-line"></div>
-          <!-- Marcadores -->
-          ${markers}
-        </div>
-        <!-- Eixo de datas -->
-        <div class="gantt-axis" style="margin-top:8px">${ticksHtml}</div>
-      </div>
-
-    </div>`;
+  return `<div class="gantt-section"><div class="gantt-title">Linha do Tempo de Atendimentos</div><div class="gantt-container"><div class="tl-chart"><div class="tl-line"></div>${markers}</div><div class="gantt-axis" style="margin-top:8px">${ticks.map(t=>`<div class="gantt-tick">${t}</div>`).join('')}</div></div></div>`;
 }
 
-// ===== TABELA DE ATENDIMENTOS =====
-function renderHistoricoTable(historico) {
-  if (!historico || !historico.length) return '';
-  // Ordena cronológico (mais antigo primeiro) para o # bater com o Gantt
-  const sorted = [...historico].sort((a,b) =>
-    (a.dataOrigem||'') > (b.dataOrigem||'') ? 1 : -1);
-
-  const rows = sorted.map((h, i) => {
-    // Dias desde o atendimento anterior
-    let diasDesde = '----';
-    if (i > 0) {
-      const prev = new Date(sorted[i-1].dataOrigem);
-      const curr = new Date(h.dataOrigem);
-      const dias = Math.round((curr - prev) / 86400000);
-      diasDesde = `<span class="dias-entre-badge">${dias}d após atend. ${i}</span>`;
-    }
-    const proc = _isProcedente(h.causa);
-
-    // Determina se este atendimento é retrabalho (mesma lógica do Gantt)
-    let isRet = false;
-    if (i > 0) {
-      const currInicio = new Date(h.dataOrigem);
-      for (let j = i - 1; j >= 0; j--) {
-        const ant = sorted[j];
-        if (_isProcedente(ant.causa) && ant.dataConc) {
-          const janela = new Date(new Date(ant.dataConc).getTime() + 90 * 86400000);
-          isRet = currInicio <= janela;
-          break;
-        }
-      }
-    }
-
-    // Cor da linha e badge
-    let rowClass = '';
-    let badgeLabel = '';
-    if (!proc) {
-      rowClass = 'row-improcedente';
-      badgeLabel = `<span class="badge-improcedente" style="font-size:0.68rem">✗ Improcedente</span>`;
-    } else if (isRet) {
-      rowClass = 'row-retrabalho';
-      badgeLabel = `<span class="badge-retrabalho" style="font-size:0.68rem">↩ Retrabalho</span>`;
-    } else {
-      rowClass = 'row-primeiro';
-      badgeLabel = i === 0
-        ? `<span class="badge-primeiro" style="font-size:0.68rem">1º Atend.</span>`
-        : `<span class="badge-procedente" style="font-size:0.68rem">✓ Procedente</span>`;
-    }
-
-    return `
-      <tr class="${rowClass}">
-        <td>
-          <span class="atend-num-badge" style="background:${!proc?'var(--eq-gray-400)':isRet?'var(--eq-red)':'var(--eq-blue)'}">${i+1}</span>
-        </td>
-        <td><strong>${h.os||'----'}</strong></td>
-        <td>${fmtDate(h.dataOrigem)}</td>
-        <td>${fmtDate(h.dataConc)}</td>
-        <td>${h.prefixo||'----'}</td>
-        <td>${h.causa||'----'} ${badgeLabel}</td>
-        <td>${diasDesde}</td>
-      </tr>`;
+// ===== TABELA =====
+function renderTabela(historico){
+  if(!historico||!historico.length)return'';
+  const sorted=[...historico].map(h=>({...h,data_origem:h.data_origem||h.dataOrigem,data_conc:h.data_conc||h.dataConc})).sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
+  const rows=sorted.map((h,i)=>{
+    let diasDesde='----';
+    if(i>0){const dias=Math.round((new Date(h.data_origem)-new Date(sorted[i-1].data_origem))/86400000);diasDesde=`<span class="dias-entre-badge">${dias}d após atend. ${i}</span>`;}
+    const proc=_isProcedente(h.causa);
+    let isRet=false;
+    if(i>0){const curr=new Date(h.data_origem);for(let j=i-1;j>=0;j--){const ant=sorted[j];if(_isProcedente(ant.causa)&&ant.data_conc){isRet=curr<=new Date(new Date(ant.data_conc).getTime()+90*86400000);break;}}}
+    const rowClass=!proc?'row-improcedente':isRet?'row-retrabalho':'row-primeiro';
+    const badge=!proc?`<span class="badge-improcedente" style="font-size:.68rem">✗ Improcedente</span>`:isRet?`<span class="badge-retrabalho" style="font-size:.68rem">↩ Retrabalho</span>`:i===0?`<span class="badge-primeiro" style="font-size:.68rem">1º Atend.</span>`:`<span class="badge-procedente" style="font-size:.68rem">✓ Procedente</span>`;
+    const numColor=!proc?'var(--eq-gray-400)':isRet?'var(--eq-red)':'var(--eq-blue)';
+    return `<tr class="${rowClass}"><td><span class="atend-num-badge" style="background:${numColor}">${i+1}</span></td><td><strong>${h.os||'----'}</strong></td><td>${fmtDate(h.data_origem)}</td><td>${fmtDate(h.data_conc)}</td><td>${h.prefixo||'----'}</td><td>${h.causa||'----'} ${badge}</td><td>${diasDesde}</td></tr>`;
   }).join('');
-
-  return `
-    <div style="margin-top:24px">
-      <div class="gantt-title" style="margin-bottom:12px">Todos os Atendimentos</div>
-      <div class="historico-table-wrap">
-        <table class="historico-table">
-          <thead><tr>
-            <th style="width:40px">#</th>
-            <th>OS</th>
-            <th>Data Início</th>
-            <th>Data Fim</th>
-            <th>Equipe</th>
-            <th>Causa</th>
-            <th>Intervalo</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-      </div>
-    </div>`;
+  return `<div style="margin-top:24px"><div class="gantt-title" style="margin-bottom:12px">Todos os Atendimentos</div><div class="historico-table-wrap"><table class="historico-table"><thead><tr><th style="width:40px">#</th><th>OS</th><th>Data Início</th><th>Data Fim</th><th>Equipe</th><th>Causa</th><th>Intervalo</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 
-// ===== PESQUISA PRINCIPAL =====
-async function pesquisarUC(uc) {
-  const resultado = document.getElementById('resultado');
-  resultado.innerHTML = `<div class="loading-state"><div class="spinner"></div><br>Consultando todas as bases...</div>`;
-
-  uc = uc.trim();
-  if (!uc) { resultado.innerHTML = `<div class="no-results"><p>Digite uma UC para pesquisar.</p></div>`; return; }
+// ===== PESQUISA =====
+async function pesquisarUC(uc){
+  const res=document.getElementById('resultado');
+  res.innerHTML=`<div class="loading-state"><div class="spinner"></div><br>Consultando todas as bases...</div>`;
+  uc=uc.trim();
+  if(!uc){res.innerHTML=`<div class="no-results"><p>Digite uma UC.</p></div>`;return;}
 
   try {
-    // ── 1. Base histórica (retrabalho confirmado) ──
-    const docHist = await db.collection('historico').doc(uc).get();
-    const dadosHist = docHist.exists ? docHist.data() : null;
-    const historicoBase = dadosHist ? (dadosHist.historico || []) : [];
+    const ucSanitized = uc.replace(/[\/\s]+/g,'_').trim();
 
-    // ── 2. Histórico recente (últimos 3 meses + atual) ──
-    const snapRecente = await db.collection('historico_recente')
-      .where('uc', '==', uc).get();
-    const recentes = [];
-    snapRecente.forEach(doc => recentes.push(doc.data()));
+    const [
+      {data:histDoc},
+      {data:recenteDocs},
+      {data:ativasDocs}
+    ] = await Promise.all([
+      db.from('historico').select('*').eq('uc', ucSanitized).maybeSingle(),
+      db.from('historico_recente').select('*').eq('uc', ucSanitized),
+      db.from('visao_atual').select('*').eq('uc', ucSanitized)
+    ]);
 
-    // ── 3. Visão atual (ocorrências abertas agora) ──
-    const snapAtual = await db.collection('visao_atual')
-      .where('uc', '==', uc).get();
-    const ativas = [];
-    snapAtual.forEach(doc => ativas.push(doc.data()));
-
-    // Verifica se a UC existe em alguma base
-    if (!dadosHist && !recentes.length && !ativas.length) {
-      resultado.innerHTML = `
-        <div class="no-results">
-          <svg width="60" height="60" viewBox="0 0 60 60" fill="none">
-            <circle cx="30" cy="30" r="28" stroke="#C8D6E5" stroke-width="2"/>
-            <path d="M20 30h20M30 20v20" stroke="#C8D6E5" stroke-width="2" stroke-linecap="round"/>
-          </svg>
-          <p>UC <strong>${uc}</strong> não encontrada em nenhuma base.</p>
-        </div>`;
+    if(!histDoc && !recenteDocs?.length && !ativasDocs?.length){
+      res.innerHTML=`<div class="no-results"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="28" stroke="#C8D6E5" stroke-width="2"/><path d="M20 30h20M30 20v20" stroke="#C8D6E5" stroke-width="2" stroke-linecap="round"/></svg><p>UC <strong>${uc}</strong> não encontrada em nenhuma base.</p></div>`;
       return;
     }
 
-    // ── 4. Monta histórico unificado ──
-    // Começa com os atendimentos da base histórica
-    const osVistas = new Set(historicoBase.map(h => h.os));
+    // Monta histórico unificado
+    const historicoBase=histDoc?(histDoc.historico||[]):[];
+    const osVistas=new Set(historicoBase.map(h=>h.os));
 
-    // Adiciona F-FINALIZADA do histórico recente que não estejam na base histórica
-    const recentesFinalizados = recentes
-      .filter(r => r.finalizado && r.dtFim)
-      .map(r => ({
-        os:        r.ocorrencia,
-        dataOrigem: r.dtInicio || null,
-        dataConc:   r.dtFim    || null,
-        prefixo:   r.equipe   || '----',
-        causa:     r.causa    || '----',
-        fonte:     'recente'
-      }))
-      .filter(r => !osVistas.has(r.os));
+    const recentesFinalizados=(recenteDocs||[]).filter(r=>r.finalizado&&r.dt_fim).map(r=>({os:r.ocorrencia,data_origem:r.dt_inicio,data_conc:r.dt_fim,prefixo:r.equipe||'----',causa:r.causa||'----',fonte:'recente'})).filter(r=>!osVistas.has(r.os));
 
-    // Adiciona ocorrências ativas (abertas) — sem data de conclusão
-    const ativasFormatadas = ativas.map(a => ({
-      os:        a.ocorrencia,
-      dataOrigem: a.dtInicio || null,
-      dataConc:   a.dtFim    || null,
-      prefixo:   a.equipe   || '----',
-      causa:     a.causa    || a.motivo || '----',
-      fonte:     'ativa',
-      estado:    a.estado
-    })).filter(a => !osVistas.has(a.os));
+    const ativasFormatadas=(ativasDocs||[]).map(a=>({os:a.ocorrencia,data_origem:a.dt_inicio,data_conc:a.dt_fim,prefixo:a.equipe||'----',causa:a.causa||'----',fonte:'ativa',estado:a.estado})).filter(a=>!osVistas.has(a.os));
 
-    // Unifica e ordena cronologicamente
-    const historicoCompleto = [
-      ...historicoBase,
-      ...recentesFinalizados,
-      ...ativasFormatadas
-    ].sort((a, b) => (a.dataOrigem||'') > (b.dataOrigem||'') ? 1 : -1);
+    const historicoCompleto=[...historicoBase,...recentesFinalizados,...ativasFormatadas].sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
 
-    // ── 5. Calcula status consolidado ──
-    // Usa o último atendimento com data de conclusão para o retrabalho
-    const ultimoComConc = [...historicoCompleto]
-      .filter(h => h.dataConc)
-      .sort((a,b) => (b.dataConc||'') > (a.dataConc||'') ? 1 : -1)[0];
+    const ultimoComConc=[...historicoCompleto].filter(h=>h.data_conc).sort((a,b)=>(b.data_conc||'')>(a.data_conc||'')?1:-1)[0];
+    const ultimoGeral=historicoCompleto[historicoCompleto.length-1]||{};
+    const dataConc=ultimoComConc?.data_conc||null;
+    const isRet=calcRetrabalho(dataConc);
+    const fim90=dataConc?new Date(new Date(dataConc).getTime()+91*86400000):null;
+    const diasR=fim90?Math.ceil((fim90-new Date())/86400000):null;
 
-    const ultimoGeral = historicoCompleto[historicoCompleto.length - 1] || {};
-    const dataConc  = ultimoComConc?.dataConc || null;
-    const isRet     = calcRetrabalho(dataConc);
-    const fim90     = dataConc ? new Date(new Date(dataConc).getTime() + 91*86400000) : null;
-    const diasR     = fim90 ? Math.ceil((fim90 - new Date()) / 86400000) : null;
-    const totalAtend = historicoCompleto.length;
+    const fontes=[];
+    if(histDoc) fontes.push('Base Histórica');
+    if(recentesFinalizados.length) fontes.push('Histórico Recente');
+    if(ativasFormatadas.length) fontes.push('Ocorrências Ativas');
 
-    // Fontes encontradas para exibir badges informativos
-    const fontes = [];
-    if (dadosHist) fontes.push('Base Histórica');
-    if (recentesFinalizados.length) fontes.push('Histórico Recente');
-    if (ativasFormatadas.length) fontes.push('Ocorrências Ativas');
-
-    resultado.innerHTML = `
+    res.innerHTML=`
       <div class="result-card">
         <div class="result-header">
           <div class="result-uc">UC ${uc}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            ${isRet ? `<span class="badge-retrabalho">⚠ Em Retrabalho</span>` : `<span class="badge-ok">✓ Fora do Período</span>`}
-            ${ativasFormatadas.length ? `<span class="badge badge-amber">🔴 ${ativasFormatadas.length} ativa(s)</span>` : ''}
+            ${isRet?`<span class="badge-retrabalho">⚠ Em Retrabalho</span>`:`<span class="badge-ok">✓ Fora do Período</span>`}
+            ${ativasFormatadas.length?`<span class="badge badge-amber">🔴 ${ativasFormatadas.length} ativa(s)</span>`:''}
           </div>
         </div>
-
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
-          ${fontes.map(f => `<span style="font-size:0.7rem;background:var(--eq-blue-pale);color:var(--eq-blue-dark);padding:2px 10px;border-radius:20px;font-weight:600">📂 ${f}</span>`).join('')}
+          ${fontes.map(f=>`<span style="font-size:.7rem;background:var(--eq-blue-pale);color:var(--eq-blue-dark);padding:2px 10px;border-radius:20px;font-weight:600">📂 ${f}</span>`).join('')}
         </div>
-
         <div class="info-grid">
-          <div class="info-item">
-            <div class="info-label">Total de Atendimentos</div>
-            <div class="info-value highlight">${totalAtend}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Última OS</div>
-            <div class="info-value">${ultimoGeral.os||'----'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Data Início Último Atend.</div>
-            <div class="info-value">${fmtDate(ultimoGeral.dataOrigem)}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Data Fim Último Atend.</div>
-            <div class="info-value">${fmtDate(ultimoGeral.dataConc)}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Equipe</div>
-            <div class="info-value">${ultimoGeral.prefixo||'----'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">Causa</div>
-            <div class="info-value">${ultimoGeral.causa||'----'}</div>
-          </div>
-          ${fim90 ? `
-          <div class="info-item">
-            <div class="info-label">Sai do Retrabalho em</div>
-            <div class="info-value" style="color:${isRet?'var(--eq-red)':'var(--eq-green)'}">
-              ${fmtDateShort(fim90.toISOString())}
-              ${diasR !== null ? `<span style="font-size:0.8rem;font-weight:400;margin-left:6px">(${diasR > 0 ? diasR+'d restantes' : 'encerrado'})</span>` : ''}
-            </div>
-          </div>` : ''}
+          <div class="info-item"><div class="info-label">Total de Atendimentos</div><div class="info-value highlight">${historicoCompleto.length}</div></div>
+          <div class="info-item"><div class="info-label">Última OS</div><div class="info-value">${ultimoGeral.os||'----'}</div></div>
+          <div class="info-item"><div class="info-label">Data Início</div><div class="info-value">${fmtDate(ultimoGeral.data_origem)}</div></div>
+          <div class="info-item"><div class="info-label">Data Fim</div><div class="info-value">${fmtDate(ultimoGeral.data_conc)}</div></div>
+          <div class="info-item"><div class="info-label">Equipe</div><div class="info-value">${ultimoGeral.prefixo||'----'}</div></div>
+          <div class="info-item"><div class="info-label">Causa</div><div class="info-value">${ultimoGeral.causa||'----'}</div></div>
+          ${fim90?`<div class="info-item"><div class="info-label">Sai do Retrabalho</div><div class="info-value" style="color:${isRet?'var(--eq-red)':'var(--eq-green)'}">
+            ${fmtDateShort(fim90.toISOString())} <span style="font-size:.8rem;font-weight:400;margin-left:6px">(${diasR>0?diasR+'d restantes':'encerrado'})</span>
+          </div></div>`:''}
         </div>
       </div>
       ${renderGantt(historicoCompleto)}
-      ${renderHistoricoTable(historicoCompleto)}`;
+      ${renderTabela(historicoCompleto)}`;
 
-  } catch(err) {
+  } catch(err){
     console.error(err);
-    resultado.innerHTML = `<div class="no-results"><p>Erro ao consultar: ${err.message}</p></div>`;
+    res.innerHTML=`<div class="no-results"><p>Erro: ${err.message}</p></div>`;
   }
 }
 
-// ===== INIT =====
-document.addEventListener('DOMContentLoaded', () => {
-  const btn   = document.getElementById('search-btn');
-  const input = document.getElementById('search-input');
+document.addEventListener('DOMContentLoaded',()=>{
+  const btn=document.getElementById('search-btn');
+  const input=document.getElementById('search-input');
+  btn.addEventListener('click',()=>pesquisarUC(input.value));
+  input.addEventListener('keydown',e=>{if(e.key==='Enter')pesquisarUC(input.value);});
 
-  btn.addEventListener('click', () => pesquisarUC(input.value));
-  input.addEventListener('keydown', e => { if (e.key==='Enter') pesquisarUC(input.value); });
+  // Breadcrumb
+  const params=new URLSearchParams(window.location.search);
+  const uc=params.get('uc'), from=params.get('from');
+  const nav=document.getElementById('topbar-nav');
+  const origens={alertas:{label:'Alertas',href:'alertas.html'},detalhamento:{label:'UCs em Retrabalho',href:'detalhamento.html'}};
+  if(nav){
+    const o=origens[from];
+    nav.innerHTML=o
+      ?`<a href="index.html" class="topbar-navitem">Início</a><span class="topbar-navsep">›</span><a href="${o.href}" class="topbar-navitem topbar-navitem--active">${o.label}</a><span class="topbar-navsep">›</span><span class="topbar-navitem topbar-navitem--current">Pesquisa</span>`
+      :`<a href="index.html" class="topbar-navitem">Início</a><span class="topbar-navsep">›</span><span class="topbar-navitem topbar-navitem--current">Pesquisa</span>`;
+  }
 
-  // Posiciona tooltip perto do cursor, sempre dentro da viewport
-  document.addEventListener('mousemove', e => {
-    const tooltip = document.querySelector('.tl-dot:hover .tl-tooltip');
-    if (!tooltip) return;
-    const tw = 220, th = 120; // largura/altura aprox do tooltip
-    const margin = 12;
-    let x = e.clientX - tw / 2;
-    let y = e.clientY - th - margin;
-    // Evita sair pela direita
-    if (x + tw > window.innerWidth - 8) x = window.innerWidth - tw - 8;
-    // Evita sair pela esquerda
-    if (x < 8) x = 8;
-    // Evita sair pelo topo — aparece abaixo do cursor
-    if (y < 8) y = e.clientY + margin;
-    tooltip.style.left = x + 'px';
-    tooltip.style.top  = y + 'px';
+  document.addEventListener('mousemove',e=>{
+    const tt=document.querySelector('.tl-dot:hover .tl-tooltip');
+    if(!tt)return;
+    const tw=220,margin=12;
+    let x=e.clientX-tw/2, y=e.clientY-120-margin;
+    if(x+tw>window.innerWidth-8)x=window.innerWidth-tw-8;
+    if(x<8)x=8;
+    if(y<8)y=e.clientY+margin;
+    tt.style.left=x+'px'; tt.style.top=y+'px';
   });
 
-  // Breadcrumb dinâmico conforme origem
-  const params    = new URLSearchParams(window.location.search);
-  const ucParam   = params.get('uc');
-  const fromParam = params.get('from');
-  const navEl     = document.getElementById('topbar-nav');
-
-  if (navEl) {
-    const origens = {
-      'alertas':       { label: 'Alertas',      href: 'alertas.html' },
-      'detalhamento':  { label: 'UCs em Retrabalho', href: 'detalhamento.html' },
-    };
-    const origem = origens[fromParam];
-    if (origem) {
-      navEl.innerHTML = `
-        <a href="index.html" class="topbar-navitem">Início</a>
-        <span class="topbar-navsep">›</span>
-        <a href="${origem.href}" class="topbar-navitem topbar-navitem--active">${origem.label}</a>
-        <span class="topbar-navsep">›</span>
-        <span class="topbar-navitem topbar-navitem--current">Pesquisa</span>`;
-    } else {
-      navEl.innerHTML = `
-        <a href="index.html" class="topbar-navitem">Início</a>
-        <span class="topbar-navsep">›</span>
-        <span class="topbar-navitem topbar-navitem--current">Pesquisa</span>`;
-    }
-  }
-
-  if (ucParam) {
-    input.value = ucParam;
-    pesquisarUC(ucParam);
-  }
+  if(uc){input.value=uc; pesquisarUC(uc);}
 });

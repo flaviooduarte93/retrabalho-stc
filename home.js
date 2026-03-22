@@ -49,32 +49,32 @@ async function carregarStatusBases() {
     const chips = [];
 
     // 1. Histórico recente — lê os metadados dos meses salvos
-    const snapMeta = await db.collection('historico_recente_meta').get();
+    const { data: snapMeta } = await db.from('historico_recente_meta').select('*');
     const mesesRecentes = [];
-    snapMeta.forEach(doc => mesesRecentes.push(doc.data()));
-    mesesRecentes.sort((a, b) => a.mesAno.localeCompare(b.mesAno));
+    (snapMeta||[]).forEach(m => mesesRecentes.push(m));
+    mesesRecentes.sort((a, b) => (a.mes_ano||'').localeCompare(b.mes_ano||''));
 
     for (const m of mesesRecentes) {
       const hoje = new Date();
       const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
-      const isAtual = m.mesAno === mesAtual;
+      const isAtual = m.mes_ano === mesAtual;
       chips.push(`
         <div class="base-chip ${isAtual ? 'chip-atual' : 'chip-fechado'}">
           <span class="chip-dot"></span>
-          <span class="chip-label">${mesAnoLabel(m.mesAno)}</span>
+          <span class="chip-label">${mesAnoLabel(m.mes_ano)}</span>
           <span class="chip-tag">${isAtual ? 'Mês atual' : 'Fechado'}</span>
-          <span class="chip-count">${m.totalRegistros} reg.</span>
+          <span class="chip-count">${m.total_registros||0} reg.</span>
         </div>`);
     }
 
     // 2. Visão atual (Decômetro) — verifica se existe algo na coleção
-    const snapAtual = await db.collection('visao_atual').limit(1).get();
-    if (!snapAtual.empty) {
+    const { data: snapAtualCheck } = await db.from('visao_atual').select('ocorrencia').limit(1);
+    if (snapAtualCheck?.length) {
       // Pega a data mais recente de uma amostra
-      const snapSample = await db.collection('visao_atual').limit(20).get();
+      const { data: snapSample } = await db.from('visao_atual').select('dt_inicio').limit(20);
       let maxDate = null;
-      snapSample.forEach(doc => {
-        const d = doc.data().dtInicio ? new Date(doc.data().dtInicio) : null;
+      (snapSample||[]).forEach(doc => {
+        const d = doc.dt_inicio ? new Date(doc.dt_inicio) : null;
         if (d && (!maxDate || d > maxDate)) maxDate = d;
       });
       const label = maxDate
@@ -89,14 +89,14 @@ async function carregarStatusBases() {
     }
 
     // 3. Base histórica
-    const snapHist = await db.collection('historico').limit(1).get();
-    if (!snapHist.empty) {
-      const countSnap = await db.collection('historico').get();
+    const { data: snapHistCheck } = await db.from('historico').select('uc').limit(1);
+    if (snapHistCheck?.length) {
+      const { count: histCount } = await db.from('historico').select('*', { count: 'exact', head: true });
       chips.push(`
         <div class="base-chip chip-historico">
           <span class="chip-dot"></span>
           <span class="chip-label">Base Histórica</span>
-          <span class="chip-count">${countSnap.size} UCs</span>
+          <span class="chip-count">${histCount||0} UCs</span>
         </div>`);
     }
 
