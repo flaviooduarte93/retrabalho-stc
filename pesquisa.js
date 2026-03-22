@@ -43,15 +43,44 @@ function renderTabela(historico){
   const rows=sorted.map((h,i)=>{
     let diasDesde='----';
     if(i>0){const dias=Math.round((new Date(h.data_origem)-new Date(sorted[i-1].data_origem))/86400000);diasDesde=`<span class="dias-entre-badge">${dias}d após atend. ${i}</span>`;}
-    const proc=_isProcedente(h.causa);
+    // Ocorrência sem data_fim = ainda ativa, não classifica como improcedente
+    const ativa = !h.data_conc;
+    const proc  = ativa ? true : _isProcedente(h.causa);
     let isRet=false;
-    if(i>0){const curr=new Date(h.data_origem);for(let j=i-1;j>=0;j--){const ant=sorted[j];if(_isProcedente(ant.causa)&&ant.data_conc){isRet=curr<=new Date(new Date(ant.data_conc).getTime()+90*86400000);break;}}}
-    const rowClass=!proc?'row-improcedente':isRet?'row-retrabalho':'row-primeiro';
-    const badge=!proc?`<span class="badge-improcedente" style="font-size:.68rem">✗ Improcedente</span>`:isRet?`<span class="badge-retrabalho" style="font-size:.68rem">↩ Retrabalho</span>`:i===0?`<span class="badge-primeiro" style="font-size:.68rem">1º Atend.</span>`:`<span class="badge-procedente" style="font-size:.68rem">✓ Procedente</span>`;
-    const numColor=!proc?'var(--eq-gray-400)':isRet?'var(--eq-red)':'var(--eq-blue)';
-    return `<tr class="${rowClass}"><td><span class="atend-num-badge" style="background:${numColor}">${i+1}</span></td><td><strong>${h.os||'----'}</strong></td><td>${fmtDate(h.data_origem)}</td><td>${fmtDate(h.data_conc)}</td><td>${h.prefixo||'----'}</td><td>${h.causa||'----'} ${badge}</td><td>${diasDesde}</td></tr>`;
+    if(i>0&&!ativa){const curr=new Date(h.data_origem);for(let j=i-1;j>=0;j--){const ant=sorted[j];if(_isProcedente(ant.causa)&&ant.data_conc){isRet=curr<=new Date(new Date(ant.data_conc).getTime()+90*86400000);break;}}}
+    const tipo = ativa?'ativa':!proc?'improcedente':isRet?'retrabalho':i===0?'primeiro':'procedente';
+    const rowClass={'ativa':'row-primeiro','improcedente':'row-improcedente','retrabalho':'row-retrabalho','primeiro':'row-primeiro','procedente':'row-primeiro'}[tipo];
+    const numColor={'ativa':'var(--eq-blue-mid)','improcedente':'var(--eq-gray-400)','retrabalho':'var(--eq-red)','primeiro':'var(--eq-blue)','procedente':'var(--eq-blue)'}[tipo];
+    const tipoLabel={'ativa':'🔵 Ativa','improcedente':'✗ Improcedente','retrabalho':'↩ Retrabalho','primeiro':'1º Atend.','procedente':'✓ Procedente'}[tipo];
+    return `<tr class="${rowClass}" data-tipo="${tipo}"><td><span class="atend-num-badge" style="background:${numColor}">${i+1}</span></td><td><strong>${h.os||'----'}</strong></td><td>${fmtDate(h.data_origem)}</td><td>${fmtDate(h.data_conc)}</td><td>${h.prefixo||'----'}</td><td>${h.causa||'----'}</td><td><span class="tipo-badge tipo-${tipo}">${tipoLabel}</span></td><td>${diasDesde}</td></tr>`;
   }).join('');
-  return `<div style="margin-top:24px"><div class="gantt-title" style="margin-bottom:12px">Todos os Atendimentos</div><div class="historico-table-wrap"><table class="historico-table"><thead><tr><th style="width:40px">#</th><th>OS</th><th>Data Início</th><th>Data Fim</th><th>Equipe</th><th>Causa</th><th>Intervalo</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+
+  // Legenda dinâmica baseada nos tipos presentes
+  const tiposPresentes=[...new Set(sorted.map((_,i)=>{
+    const h=sorted[i];
+    const ativa=!h.data_conc;
+    const proc=ativa?true:_isProcedente(h.causa);
+    let isRet=false;
+    if(i>0&&!ativa){const curr=new Date(h.data_origem);for(let j=i-1;j>=0;j--){const ant=sorted[j];if(_isProcedente(ant.causa)&&ant.data_conc){isRet=curr<=new Date(new Date(ant.data_conc).getTime()+90*86400000);break;}}}
+    return ativa?'ativa':!proc?'improcedente':isRet?'retrabalho':i===0?'primeiro':'procedente';
+  }))];
+  const legendaMap={
+    'primeiro':   {color:'var(--eq-blue)',       label:'1º Atendimento'},
+    'procedente': {color:'var(--eq-blue)',        label:'Procedente'},
+    'retrabalho': {color:'var(--eq-red)',         label:'Retrabalho'},
+    'improcedente':{color:'var(--eq-gray-400)',   label:'Improcedente'},
+    'ativa':      {color:'var(--eq-blue-mid)',    label:'Ocorrência Ativa'},
+  };
+  const legenda=tiposPresentes.map(t=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:.75rem;color:var(--eq-gray-700)"><span style="width:10px;height:10px;border-radius:50%;background:${legendaMap[t].color};display:inline-block"></span>${legendaMap[t].label}</span>`).join('');
+
+  return `<div style="margin-top:24px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <div class="gantt-title" style="margin-bottom:0">Todos os Atendimentos</div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">${legenda}</div>
+    </div>
+    <div class="historico-table-wrap"><table class="historico-table"><thead><tr>
+      <th style="width:40px">#</th><th>OS</th><th>Data Início</th><th>Data Fim</th><th>Equipe</th><th>Causa</th><th>Tipo</th><th>Intervalo</th>
+    </tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 
 // ===== PESQUISA =====
@@ -79,15 +108,36 @@ async function pesquisarUC(uc){
       return;
     }
 
-    // Monta histórico unificado
+    // Monta histórico unificado com deduplicação
+    // Chave: número final da OS + mês/ano da data_origem
+    function chaveOS(osStr, dataStr) {
+      const num = String(osStr||'').trim().replace(/^\d{4}-\d+-/, '');
+      if (!dataStr) return String(osStr||'').trim();
+      const d = new Date(dataStr);
+      if (isNaN(d)) return String(osStr||'').trim();
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${num}`;
+    }
+    function duracao(h) {
+      if (!h.data_origem || !h.data_conc) return 0;
+      return new Date(h.data_conc) - new Date(h.data_origem);
+    }
+
     const historicoBase=histDoc?(histDoc.historico||[]):[];
-    const osVistas=new Set(historicoBase.map(h=>h.os));
 
-    const recentesFinalizados=(recenteDocs||[]).filter(r=>r.finalizado&&r.dt_fim).map(r=>({os:r.ocorrencia,data_origem:r.dt_inicio,data_conc:r.dt_fim,prefixo:r.equipe||'----',causa:r.causa||'----',fonte:'recente'})).filter(r=>!osVistas.has(r.os));
+    const recentesFinalizados=(recenteDocs||[])
+      .filter(r=>r.finalizado&&r.dt_fim)
+      .map(r=>({os:r.ocorrencia,data_origem:r.dt_inicio,data_conc:r.dt_fim,prefixo:r.equipe||'----',causa:r.causa||'----',fonte:'recente'}));
 
-    const ativasFormatadas=(ativasDocs||[]).map(a=>({os:a.ocorrencia,data_origem:a.dt_inicio,data_conc:a.dt_fim,prefixo:a.equipe||'----',causa:a.causa||'----',fonte:'ativa',estado:a.estado})).filter(a=>!osVistas.has(a.os));
+    const ativasFormatadas=(ativasDocs||[])
+      .map(a=>({os:a.ocorrencia,data_origem:a.dt_inicio,data_conc:a.dt_fim||null,prefixo:a.equipe||'----',causa:a.causa||'----',fonte:'ativa',estado:a.estado}));
 
-    const historicoCompleto=[...historicoBase,...recentesFinalizados,...ativasFormatadas].sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
+    // Deduplicação: agrupa por chave, mantém maior duração
+    const deduMap = {};
+    for (const h of [...historicoBase, ...recentesFinalizados, ...ativasFormatadas]) {
+      const k = chaveOS(h.os, h.data_origem);
+      if (!deduMap[k] || duracao(h) > duracao(deduMap[k])) deduMap[k] = h;
+    }
+    const historicoCompleto = Object.values(deduMap).sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
 
     const ultimoComConc=[...historicoCompleto].filter(h=>h.data_conc).sort((a,b)=>(b.data_conc||'')>(a.data_conc||'')?1:-1)[0];
     const ultimoGeral=historicoCompleto[historicoCompleto.length-1]||{};
