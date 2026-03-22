@@ -65,8 +65,8 @@ function renderRetrabalho(el){
         </div>
         <div class="alert-detail" style="margin-top:2px">
           Causa: <strong>${o.causa_historico||'----'}</strong>
-          &nbsp;${badgeProcedencia(o.causa_historico)}
         </div>
+        <div style="margin-top:4px">${badgeProcedencia(o.causa_historico)}</div>
       </div>
       <div class="alert-badges">
         <span class="badge ${estadoBadge(o.estado)}">${o.estado||'----'}</span>
