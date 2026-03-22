@@ -24,7 +24,7 @@ function renderLista(lista){
       <div class="dropdown-header" onclick="toggleDropdown('${uid}')">
         <div class="dropdown-header-left">
           <div class="dropdown-uc">UC ${h.uc}</div>
-          <div class="dropdown-meta">${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong> · ${h.causa||'----'} <span style="margin-left:6px">${badgeProcedencia(h.causa)}</span></div>
+          <div class="dropdown-meta">${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong> <br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
         </div>
         <div class="dropdown-header-right">
           <div class="dropdown-progress">
