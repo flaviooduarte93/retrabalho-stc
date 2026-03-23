@@ -133,7 +133,21 @@ async function pesquisarUC(uc){
     const ultimoComConc=[...historicoCompleto].filter(h=>h.data_conc).sort((a,b)=>(b.data_conc||'')>(a.data_conc||'')?1:-1)[0];
     const ultimoGeral=historicoCompleto[historicoCompleto.length-1]||{};
     const dataConc=ultimoComConc?.data_conc||null;
-    const isRet=calcRetrabalho(dataConc);
+
+    // "EM RETRABALHO" só se houver 2+ atendimentos procedentes dentro de 90 dias entre si
+    // Caso contrário, é "Dentro da Janela" (pode virar retrabalho se tiver nova ocorrência)
+    const procedentesComData = historicoCompleto.filter(h => h.data_conc && _isProcedente(h.causa));
+    let isRet = false;
+    for (let i = 1; i < procedentesComData.length; i++) {
+      const ant = procedentesComData[i-1];
+      const cur = procedentesComData[i];
+      const diff = (new Date(cur.data_origem) - new Date(ant.data_conc)) / 86400000;
+      if (diff <= 90) { isRet = true; break; }
+    }
+    // Se tem ocorrência ativa + procedente anterior dentro de 90 dias → possível retrabalho
+    const temAtiva = historicoCompleto.some(h => !h.data_conc);
+    const ultimoProcedente = procedentesComData[procedentesComData.length-1];
+    const isPossivel = !isRet && temAtiva && ultimoProcedente && calcRetrabalho(ultimoProcedente.data_conc);
     const fim90=dataConc?new Date(new Date(dataConc).getTime()+91*86400000):null;
     const diasR=fim90?Math.ceil((fim90-new Date())/86400000):null;
 
