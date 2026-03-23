@@ -10,7 +10,7 @@ function fmtDate(iso){if(!iso)return'----';return new Date(iso).toLocaleString('
 function fmtDateShort(iso){if(!iso)return'----';return new Date(iso).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
 
 // ===== JANELA 90 DIAS =====
-function calcRetrabalho(dc){
+function dentroJanela(dc){
   if(!dc)return false;
   return new Date() <= new Date(new Date(dc).getTime() + 90*86400000);
 }
@@ -18,14 +18,14 @@ function calcRetrabalho(dc){
 // ===== GANTT =====
 function renderGantt(historico){
   if(!historico||!historico.length)return'';
-  const sorted=[...historico].filter(h=>h.data_origem||h.dataOrigem).map(h=>({...h,data_origem:h.data_origem||h.dataOrigem,data_conc:h.data_conc||h.dataConc})).sort((a,b)=>new Date(a.data_origem)-new Date(b.data_origem));
-  if(!sorted.length)return'';
+  const sorted=[...historico].map(h=>({...h,data_origem:h.data_origem,data_conc:h.data_conc}))
+  .sort((a,b)=>new Date(a.data_origem)-new Date(b.data_origem));
+
   const minDate=new Date(sorted[0].data_origem);
   const maxDate=new Date(sorted[sorted.length-1].data_origem);
-  minDate.setDate(minDate.getDate()-7); maxDate.setDate(maxDate.getDate()+7);
+  minDate.setDate(minDate.getDate()-7); 
+  maxDate.setDate(maxDate.getDate()+7);
   const totalMs=maxDate-minDate||1;
-  const ticks=[];
-  for(let i=0;i<=5;i++) ticks.push(new Date(minDate.getTime()+totalMs*i/5).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}));
 
   const markers=sorted.map((h,i)=>{
     const pos=((new Date(h.data_origem)-minDate)/totalMs*100).toFixed(2);
@@ -34,25 +34,17 @@ function renderGantt(historico){
       const curr=new Date(h.data_origem);
       for(let j=i-1;j>=0;j--){
         const ant=sorted[j];
-        if(_isProcedente(ant.causa||ant.prefixo)&&(ant.data_conc||ant.dataConc)){
-          const janela=new Date(new Date(ant.data_conc||ant.dataConc).getTime()+90*86400000);
+        if(_isProcedente(ant.causa)&&ant.data_conc){
+          const janela=new Date(new Date(ant.data_conc).getTime()+90*86400000);
           isRet=curr<=janela;
           break;
         }
       }
     }
-    const color=isRet?'var(--eq-red)':'var(--eq-blue)';
-    const causaTip=(h.causa||'----').substring(0,45)+((h.causa||'').length>45?'…':'');
+    const color=isRet?'red':'blue';
     return `<div class="tl-marker-wrap" style="left:${pos}%">
       <div class="tl-dot" style="background:${color};border-color:${color}">
         <span class="tl-dot-num">${i+1}</span>
-        <div class="tl-tooltip">
-          <div class="tl-tooltip-num">Atendimento ${i+1}</div>
-          <div class="tl-tooltip-os">${h.os||'----'}</div>
-          <div class="tl-tooltip-row">📋 ${causaTip}</div>
-          <div class="tl-tooltip-row">▶ ${fmtDate(h.data_origem)}</div>
-          <div class="tl-tooltip-row">■ ${fmtDate(h.data_conc)}</div>
-        </div>
       </div>
     </div>`;
   }).join('');
@@ -63,9 +55,6 @@ function renderGantt(historico){
       <div class="tl-chart">
         <div class="tl-line"></div>${markers}
       </div>
-      <div class="gantt-axis" style="margin-top:8px">
-        ${ticks.map(t=>`<div class="gantt-tick">${t}</div>`).join('')}
-      </div>
     </div>
   </div>`;
 }
@@ -73,12 +62,13 @@ function renderGantt(historico){
 // ===== TABELA =====
 function renderTabela(historico){
   if(!historico||!historico.length)return'';
-  const sorted=[...historico].map(h=>({...h,data_origem:h.data_origem||h.dataOrigem,data_conc:h.data_conc||h.dataConc})).sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
+  const sorted=[...historico].sort((a,b)=>new Date(a.data_origem)-new Date(b.data_origem));
+
   const rows=sorted.map((h,i)=>{
     let diasDesde='----';
     if(i>0){
       const dias=Math.round((new Date(h.data_origem)-new Date(sorted[i-1].data_origem))/86400000);
-      diasDesde=`<span class="dias-entre-badge">${dias}d após atend. ${i}</span>`;
+      diasDesde=`${dias}d`;
     }
 
     const ativa = !h.data_conc;
@@ -96,8 +86,7 @@ function renderTabela(historico){
       }
     }
 
-    const tipo = ativa?'ativa':!proc?'improcedente':isRet?'retrabalho':i===0?'primeiro':'procedente';
-    const tipoLabel={'ativa':'🔵 Ativa','improcedente':'✗ Improcedente','retrabalho':'↩ Retrabalho','primeiro':'1º Atend.','procedente':'✓ Procedente'}[tipo];
+    const tipo = ativa?'Ativa':!proc?'Improcedente':isRet?'Retrabalho':i===0?'Primeiro':'Procedente';
 
     return `<tr>
       <td>${i+1}</td>
@@ -106,22 +95,20 @@ function renderTabela(historico){
       <td>${fmtDate(h.data_conc)}</td>
       <td>${h.prefixo||'----'}</td>
       <td>${h.causa||'----'}</td>
-      <td>${tipoLabel}</td>
+      <td>${tipo}</td>
       <td>${diasDesde}</td>
     </tr>`;
   }).join('');
 
   return `<div style="margin-top:24px">
-    <div class="historico-table-wrap">
-      <table class="historico-table">
-        <thead>
-          <tr>
-            <th>#</th><th>OS</th><th>Data Início</th><th>Data Fim</th><th>Equipe</th><th>Causa</th><th>Tipo</th><th>Intervalo</th>
-          </tr>
-        </thead>
-        <tbody>${rows}</tbody>
-      </table>
-    </div>
+    <table class="historico-table">
+      <thead>
+        <tr>
+          <th>#</th><th>OS</th><th>Data Início</th><th>Data Fim</th><th>Equipe</th><th>Causa</th><th>Tipo</th><th>Intervalo</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
   </div>`;
 }
 
@@ -150,41 +137,40 @@ async function pesquisarUC(uc){
       .map(a=>({os:a.ocorrencia,data_origem:a.dt_inicio,data_conc:null,prefixo:a.equipe||'----',causa:a.causa||'----'}));
 
     const historicoCompleto=[...historicoBase,...recentesFinalizados,...ativasFormatadas]
-      .sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
+      .sort((a,b)=>new Date(a.data_origem)-new Date(b.data_origem));
 
     const procedentesComData = historicoCompleto.filter(h => h.data_conc && _isProcedente(h.causa));
 
-    // ===== RETRABALHO =====
-    let isRet = false;
+    // ===== CLASSIFICAÇÃO =====
+    let emRetrabalho = false;
     for (let i = 1; i < procedentesComData.length; i++) {
       const ant = procedentesComData[i-1];
       const cur = procedentesComData[i];
       const diff = (new Date(cur.data_origem) - new Date(ant.data_conc)) / 86400000;
-      if (diff <= 90) { isRet = true; break; }
+      if (diff <= 90) { emRetrabalho = true; break; }
     }
 
-    // OS ativa dentro da janela
-    const temAtiva = historicoCompleto.some(h => !h.data_conc);
     const ultimoProcedente = procedentesComData[procedentesComData.length-1];
+    const temAtiva = historicoCompleto.some(h => !h.data_conc);
 
-    let isPossivel = false;
-    if (!isRet && temAtiva && ultimoProcedente) {
+    let possivelRetrabalho = false;
+    if (!emRetrabalho && temAtiva && ultimoProcedente) {
       const limite = new Date(ultimoProcedente.data_conc).getTime() + (90 * 86400000);
-      isPossivel = historicoCompleto.some(h => {
+      possivelRetrabalho = historicoCompleto.some(h => {
         if (h.data_conc) return false;
-        const dataInicio = new Date(h.data_origem).getTime();
-        return dataInicio <= limite;
+        return new Date(h.data_origem).getTime() <= limite;
       });
     }
 
-    let dentroJanela = false;
-    if (!isRet && !isPossivel && ultimoProcedente) {
-      dentroJanela = calcRetrabalho(ultimoProcedente.data_conc);
+    let dentroDaJanela = false;
+    if (!emRetrabalho && !possivelRetrabalho && ultimoProcedente) {
+      dentroDaJanela = dentroJanela(ultimoProcedente.data_conc);
     }
 
     let statusUC = "fora";
-    if (isRet || isPossivel) statusUC = "retrabalho";
-    else if (dentroJanela) statusUC = "janela";
+    if (emRetrabalho) statusUC = "retrabalho";
+    else if (possivelRetrabalho) statusUC = "possivel";
+    else if (dentroDaJanela) statusUC = "janela";
 
     const dataConc = ultimoProcedente?.data_conc || null;
     const fimJanela = dataConc ? new Date(new Date(dataConc).getTime()+90*86400000) : null;
@@ -198,10 +184,12 @@ async function pesquisarUC(uc){
           <div class="result-uc">UC ${uc}</div>
           <div>
             ${statusUC === "retrabalho"
-              ? `<span class="badge-retrabalho">⚠ Em Retrabalho</span>`
-              : statusUC === "janela"
-                ? `<span class="badge badge-amber">⏳ Dentro da Janela</span>`
-                : `<span class="badge-ok">✓ Fora do Período</span>`
+              ? `<span class="badge-retrabalho">🔴 Em Retrabalho</span>`
+              : statusUC === "possivel"
+                ? `<span class="badge badge-amber">🟡 Possível Retrabalho</span>`
+                : statusUC === "janela"
+                  ? `<span class="badge badge-orange">🟠 Dentro da Janela</span>`
+                  : `<span class="badge-ok">🟢 Fora do Período</span>`
             }
           </div>
         </div>
