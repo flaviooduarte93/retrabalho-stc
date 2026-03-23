@@ -196,20 +196,28 @@ async function carregarAlertas(){
     const hoje = new Date();
     const limite90 = new Date(hoje.getTime()-90*86400000).toISOString();
 
-    // Busca tudo em paralelo
-    const [
-      { data: ativas },
-      { data: histData },
-      { data: recenteProc }
-    ] = await Promise.all([
+    // Busca ativas e histórico em paralelo
+    const [{ data: ativas }, { data: histData }] = await Promise.all([
       db.from('visao_atual').select('*'),
       db.from('historico').select('uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico'),
-      db.from('historico_recente')
+    ]);
+
+    // Busca F-FINALIZADA procedentes com paginação (evita limite de 1000 linhas do Supabase)
+    let recenteProc = [];
+    let page = 0;
+    while (true) {
+      const { data: chunk } = await db
+        .from('historico_recente')
         .select('uc,ocorrencia,dt_fim,causa,procedente')
         .eq('finalizado', true)
         .eq('procedente', true)
         .gte('dt_fim', limite90)
-    ]);
+        .range(page * 1000, page * 1000 + 999);
+      if (!chunk || chunk.length === 0) break;
+      recenteProc = recenteProc.concat(chunk);
+      if (chunk.length < 1000) break;
+      page++;
+    }
 
     const historicoMap = {};
     (histData||[]).forEach(h => { historicoMap[h.uc] = h; });
