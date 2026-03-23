@@ -217,7 +217,32 @@ async function carregarAlertas(){
     // Classifica alertas — enriquece retrabalho com dados do histórico
     const comRetrabalho = (ativas||[])
       .filter(o => o.em_historico)
-      .map(o => ({ ...o, _hist: historicoMap[o.uc] || null }));
+      .map(o => {
+        const hist = historicoMap[o.uc] || null;
+        return { ...o, _hist: hist };
+      });
+
+    // Busca total real de atendimentos por UC (histórico recente, OS únicas finalizadas)
+    const ucsRetrabalho = [...new Set(comRetrabalho.map(o => o.uc))];
+    const totalAtendMap = {};
+    if (ucsRetrabalho.length) {
+      for (let i = 0; i < ucsRetrabalho.length; i += 200) {
+        const { data: recs } = await db
+          .from('historico_recente')
+          .select('uc, ocorrencia')
+          .in('uc', ucsRetrabalho.slice(i, i+200));
+        (recs||[]).forEach(r => {
+          if (!totalAtendMap[r.uc]) totalAtendMap[r.uc] = new Set();
+          totalAtendMap[r.uc].add(r.ocorrencia);
+        });
+      }
+    }
+    // Aplica total consolidado: máximo entre base histórica e histórico recente
+    comRetrabalho.forEach(o => {
+      const histTotal   = o._hist?.qtd_atendimentos || o.qtd_atendimentos || 1;
+      const recenteTotal = totalAtendMap[o.uc]?.size || 0;
+      o.qtd_atendimentos = Math.max(histTotal, recenteTotal);
+    });
     const ucsComAlerta  = new Set(comRetrabalho.map(o => o.uc));
 
     // Mapa de F-FINALIZADA procedentes por UC (histórico recente)
