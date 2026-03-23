@@ -161,7 +161,14 @@ async function pesquisarUC(uc){
         <div class="result-header">
           <div class="result-uc">UC ${uc}</div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            ${isRet?`<span class="badge-retrabalho">⚠ Em Retrabalho</span>`:`<span class="badge-ok">✓ Fora do Período</span>`}
+            ${isRet
+              ? `<span class="badge-retrabalho">⚠ Em Retrabalho</span>`
+              : isPossivel
+                ? `<span class="badge-retrabalho" style="background:var(--eq-amber-dark)">⚠ Possível Retrabalho</span>`
+                : calcRetrabalho(dataConc)
+                  ? `<span class="badge-ok" style="background:var(--eq-blue)">🕐 Na Janela de 90 dias</span>`
+                  : `<span class="badge-ok">✓ Fora do Período</span>`
+            }
             ${ativasFormatadas.length?`<span class="badge badge-amber">🔴 ${ativasFormatadas.length} ativa(s)</span>`:''}
           </div>
         </div>
