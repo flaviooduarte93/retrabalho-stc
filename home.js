@@ -41,18 +41,25 @@ function mesAnoLabel(key) {
   return `${MESES_PT[mes]||mes}/${ano}`;
 }
 
+function fmtDateTime(iso) {
+  if (!iso) return '----';
+  return new Date(iso).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
+  });
+}
+
 async function carregarStatusBases() {
   const el = document.getElementById('bases-chips');
   if (!el) return;
 
   try {
     const chips = [];
+    const atualizacoes = {}; // guarda última atualização por base
 
-    // 1. Histórico recente — lê os metadados dos meses salvos
+    // 1. Histórico recente — lê metadados dos meses
     const { data: snapMeta } = await db.from('historico_recente_meta').select('*');
-    const mesesRecentes = [];
-    (snapMeta||[]).forEach(m => mesesRecentes.push(m));
-    mesesRecentes.sort((a, b) => (a.mes_ano||'').localeCompare(b.mes_ano||''));
+    const mesesRecentes = [...(snapMeta||[])].sort((a,b) => (a.mes_ano||'').localeCompare(b.mes_ano||''));
 
     for (const m of mesesRecentes) {
       const hoje = new Date();
@@ -61,16 +68,26 @@ async function carregarStatusBases() {
       chips.push(`
         <div class="base-chip ${isAtual ? 'chip-atual' : 'chip-fechado'}">
           <span class="chip-dot"></span>
-          <span class="chip-label">${mesAnoLabel(m.mes_ano)}</span>
-          <span class="chip-tag">${isAtual ? 'Mês atual' : 'Fechado'}</span>
-          <span class="chip-count">${m.total_registros||0} reg.</span>
+          <div class="chip-info">
+            <div class="chip-top">
+              <span class="chip-label">${mesAnoLabel(m.mes_ano)}</span>
+              <span class="chip-tag">${isAtual ? 'Mês atual' : 'Fechado'}</span>
+              <span class="chip-count">${m.total_registros||0} reg.</span>
+            </div>
+            ${m.atualizado_em ? `<div class="chip-updated">⏱ ${fmtDateTime(m.atualizado_em)}</div>` : ''}
+          </div>
         </div>`);
+      // Guarda a mais recente atualização do histórico recente
+      if (m.atualizado_em) {
+        if (!atualizacoes.recente || m.atualizado_em > atualizacoes.recente) {
+          atualizacoes.recente = m.atualizado_em;
+        }
+      }
     }
 
-    // 2. Visão atual (Decômetro) — verifica se existe algo na coleção
+    // 2. Visão atual — busca a meta da visão atual
     const { data: snapAtualCheck } = await db.from('visao_atual').select('ocorrencia').limit(1);
     if (snapAtualCheck?.length) {
-      // Pega a data mais recente de uma amostra
       const { data: snapSample } = await db.from('visao_atual').select('dt_inicio').limit(20);
       let maxDate = null;
       (snapSample||[]).forEach(doc => {
@@ -80,11 +97,25 @@ async function carregarStatusBases() {
       const label = maxDate
         ? mesAnoLabel(`${maxDate.getFullYear()}-${String(maxDate.getMonth()+1).padStart(2,'0')}`)
         : 'Mês atual';
+
+      // Busca a data de atualização da visão atual via meta
+      const { data: visaoMeta } = await db
+        .from('historico_recente_meta')
+        .select('atualizado_em')
+        .order('atualizado_em', { ascending: false })
+        .limit(1);
+      const visaoTs = visaoMeta?.[0]?.atualizado_em || null;
+
       chips.push(`
         <div class="base-chip chip-visao">
           <span class="chip-dot"></span>
-          <span class="chip-label">Visão Atual</span>
-          <span class="chip-tag">${label}</span>
+          <div class="chip-info">
+            <div class="chip-top">
+              <span class="chip-label">Ocorrências Ativas</span>
+              <span class="chip-tag">${label}</span>
+            </div>
+            ${visaoTs ? `<div class="chip-updated">⏱ ${fmtDateTime(visaoTs)}</div>` : ''}
+          </div>
         </div>`);
     }
 
@@ -92,11 +123,20 @@ async function carregarStatusBases() {
     const { data: snapHistCheck } = await db.from('historico').select('uc').limit(1);
     if (snapHistCheck?.length) {
       const { count: histCount } = await db.from('historico').select('*', { count: 'exact', head: true });
+      // Supabase não tem timestamp de atualização nativo, usamos um doc de meta
+      const { data: histMeta } = await db.from('historico_meta').select('atualizado_em').limit(1);
+      const histTs = histMeta?.[0]?.atualizado_em || null;
+
       chips.push(`
         <div class="base-chip chip-historico">
           <span class="chip-dot"></span>
-          <span class="chip-label">Base Histórica</span>
-          <span class="chip-count">${histCount||0} UCs</span>
+          <div class="chip-info">
+            <div class="chip-top">
+              <span class="chip-label">Base Histórica</span>
+              <span class="chip-count">${histCount||0} UCs</span>
+            </div>
+            ${histTs ? `<div class="chip-updated">⏱ ${fmtDateTime(histTs)}</div>` : ''}
+          </div>
         </div>`);
     }
 
