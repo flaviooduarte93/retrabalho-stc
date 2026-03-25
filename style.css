@@ -1400,3 +1400,220 @@ body {
 .tipo-retrabalho  { background: var(--eq-red-light);   color: var(--eq-red); }
 .tipo-improcedente{ background: var(--eq-gray-100);    color: var(--eq-gray-600); }
 .tipo-ativa       { background: var(--eq-blue-pale);   color: var(--eq-blue-mid); }
+
+/* ============================================================
+   RESPONSIVIDADE COMPLETA — Mobile First
+   Breakpoints: sm=480px, md=768px, lg=1024px
+   ============================================================ */
+
+/* ===== BASE MOBILE ===== */
+@media (max-width: 768px) {
+
+  /* Topbar */
+  .topbar { height: 52px; padding: 0 14px; }
+  .topbar-brand .brand-title { font-size: 1.1rem; }
+  .topbar-badge { display: none; }
+  .topbar-nav { gap: 4px; }
+  .topbar-navitem { font-size: 0.75rem; }
+  .topbar-navsep { font-size: 0.65rem; }
+
+  /* Home */
+  .home-container { padding: 20px 16px 32px; gap: 28px; }
+  .home-header { gap: 12px; padding-top: 10px; }
+  .logo-badge svg { width: 36px; height: 36px; }
+  .brand-title { font-size: 2rem; }
+  .system-subtitle { font-size: 0.8rem; }
+
+  /* Nav cards — empilha no mobile */
+  .nav-cards {
+    grid-template-columns: 1fr !important;
+    gap: 14px;
+  }
+  .nav-card { padding: 20px 18px; }
+  .card-content h2 { font-size: 1rem; }
+  .card-content p { font-size: 0.8rem; }
+  .card-icon svg { width: 28px; height: 28px; }
+
+  /* Upload */
+  .upload-section { padding: 18px 16px; }
+  .upload-grid { grid-template-columns: 1fr !important; gap: 12px; }
+  .upload-type { font-size: 0.85rem; }
+  .upload-hint { font-size: 0.7rem; }
+
+  /* Bases status chips */
+  .bases-chips { gap: 8px; }
+  .base-chip { padding: 6px 10px; font-size: 0.72rem; }
+  .chip-count { display: none; }
+
+  /* Page main */
+  .page-main { padding: 20px 14px 48px; margin-top: 52px; }
+  .page-title { font-size: 1.25rem; }
+  .page-subtitle { font-size: 0.82rem; }
+
+  /* Search */
+  .search-box { flex-direction: column; gap: 8px; }
+  .search-input { border-radius: 12px; padding: 12px 16px; }
+  .search-btn { border-radius: 12px; padding: 12px; width: 100%; }
+
+  /* Stat cards — 2 por linha */
+  .alert-stats {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px;
+  }
+  .stat-card { padding: 14px; }
+  .stat-value { font-size: 1.5rem; }
+  .stat-label { font-size: 0.7rem; }
+
+  /* Visão selector */
+  .visao-selector { flex-direction: column; gap: 6px; padding: 8px; }
+  .visao-btn { font-size: 0.8rem; padding: 10px 12px; }
+
+  /* Alert items */
+  .alert-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 14px 16px;
+  }
+  .alert-oc { font-size: 0.85rem; }
+  .alert-uc { font-size: 0.85rem; }
+  .alert-detail { font-size: 0.75rem; }
+  .alert-badges { flex-wrap: wrap; gap: 5px; }
+  .badge { font-size: 0.65rem; padding: 2px 8px; }
+  .badge-360 { font-size: 0.65rem; }
+
+  /* Result card */
+  .result-card { padding: 18px 16px; }
+  .result-uc { font-size: 1.1rem; }
+  .info-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .info-value { font-size: 0.85rem; }
+  .info-value.highlight { font-size: 1rem; }
+
+  /* Gantt timeline */
+  .tl-chart { height: 70px; margin: 0 8px; }
+  .tl-dot { width: 26px; height: 26px; }
+  .tl-dot-num { font-size: 0.65rem; }
+  .gantt-axis { margin: 0 8px; }
+  .gantt-tick { font-size: 0.6rem; }
+  .tl-dias-badge { font-size: 0.6rem; padding: 1px 5px; }
+
+  /* Historico table */
+  .historico-table th,
+  .historico-table td { padding: 8px 10px; font-size: 0.75rem; }
+  .atend-num-badge { width: 20px; height: 20px; font-size: 0.65rem; }
+  .dias-entre-badge { font-size: 0.65rem; padding: 1px 6px; }
+
+  /* Dropdown items */
+  .dropdown-header { flex-direction: column; gap: 12px; padding: 14px; }
+  .dropdown-header-right {
+    width: 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .dropdown-progress { width: 100%; order: -1; }
+  .dropdown-uc { font-size: 0.9rem; }
+  .dropdown-meta { font-size: 0.72rem; }
+  .dropdown-dias-num { font-size: 1.1rem; }
+  .dropdown-saida { display: none; }
+
+  /* Sort bar */
+  .historico-toolbar {
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px;
+  }
+  .filtro-uc-wrap { width: 100%; }
+  .sort-group { flex-wrap: wrap; gap: 6px; }
+  .sort-btn { font-size: 0.72rem; padding: 5px 10px; }
+
+  /* Section head */
+  .section-head h2 { font-size: 0.9rem; }
+  .section-count { min-width: 26px; height: 26px; font-size: 0.72rem; }
+
+  /* Modal */
+  .modal-box { min-width: 90vw; padding: 24px 20px; }
+
+  /* Gantt section */
+  .gantt-section { padding: 18px 14px; }
+  .gantt-title { font-size: 0.88rem; }
+}
+
+/* ===== VERY SMALL MOBILE (< 480px) ===== */
+@media (max-width: 480px) {
+
+  .alert-stats { grid-template-columns: 1fr 1fr !important; }
+  .stat-value { font-size: 1.3rem; }
+
+  /* Nav cards full width */
+  .nav-cards { grid-template-columns: 1fr !important; }
+
+  /* Info grid single column */
+  .info-grid { grid-template-columns: 1fr !important; }
+
+  /* Topbar — hide breadcrumb on tiny screens */
+  .topbar-nav .topbar-navsep,
+  .topbar-navitem--current { display: none; }
+  .topbar-navitem--active::before { content: '← '; }
+
+  /* Visão buttons stack */
+  .visao-selector { gap: 4px; }
+  .visao-btn { font-size: 0.75rem; padding: 9px 8px; }
+
+  /* Bases home */
+  .bases-status { padding: 14px 12px; }
+  .base-chip { padding: 5px 8px; }
+  .chip-tag { display: none; }
+}
+
+/* ===== TABLET (768px - 1024px) ===== */
+@media (min-width: 769px) and (max-width: 1024px) {
+
+  .home-container { padding: 40px 20px; }
+  .nav-cards { grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+  .upload-grid { grid-template-columns: 1fr 1fr 1fr !important; }
+
+  .page-main { padding: 28px 20px 48px; }
+  .alert-stats { grid-template-columns: repeat(2, 1fr) !important; }
+
+  .dropdown-header { flex-wrap: wrap; }
+  .dropdown-header-right { flex-wrap: wrap; gap: 10px; }
+  .dropdown-progress { width: 180px; }
+
+  .info-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ===== DESKTOP LARGE (> 1400px) ===== */
+@media (min-width: 1400px) {
+  .home-container { max-width: 1200px; }
+  .page-main { max-width: 1300px; }
+}
+
+/* ===== TOUCH IMPROVEMENTS ===== */
+@media (hover: none) {
+  /* Larger tap targets on touch */
+  .nav-card { min-height: 100px; }
+  .sort-btn { min-height: 36px; }
+  .visao-btn { min-height: 44px; }
+  .search-btn { min-height: 48px; }
+  .upload-btn { min-height: 38px; padding: 9px 20px; }
+  .dropdown-header { min-height: 60px; }
+  .accordion-header { min-height: 60px; }
+
+  /* Remove hover effects that don't work on touch */
+  .nav-card:hover { transform: none; }
+  .alert-item:hover { transform: none; }
+}
+
+/* ===== PRINT ===== */
+@media print {
+  .topbar, .search-box, .visao-selector,
+  .historico-toolbar, .btn-refresh { display: none !important; }
+  .page-main { margin-top: 0; padding: 0; }
+  .result-card, .gantt-section, .historico-table-wrap {
+    box-shadow: none;
+    border: 1px solid #ddd;
+  }
+}
