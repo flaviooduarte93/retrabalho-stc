@@ -1617,3 +1617,26 @@ body {
     border: 1px solid #ddd;
   }
 }
+
+/* ===== CHIP COM DATA DE ATUALIZAÇÃO ===== */
+.base-chip {
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+}
+.chip-info {
+  display: flex; flex-direction: column; gap: 3px;
+}
+.chip-top {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.chip-updated {
+  font-size: 0.65rem;
+  color: rgba(255,255,255,0.45);
+  margin-top: 1px;
+}
+.chip-fechado .chip-updated { color: rgba(66,165,245,0.6); }
+.chip-atual   .chip-updated { color: rgba(249,168,37,0.7); }
+.chip-visao   .chip-updated { color: rgba(77,182,172,0.7); }
+.chip-historico .chip-updated { color: rgba(200,214,229,0.5); }
