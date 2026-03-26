@@ -64,9 +64,23 @@ function ordenarLista(criterio){_criterio=criterio;document.querySelectorAll('.s
 async function carregar(){
   document.getElementById('det-container').innerHTML=`<div class="loading-state"><div class="spinner"></div><br>Carregando...</div>`;
   try {
-    const { data: ativas } = await db.from('visao_atual').select('uc');
+    async function fetchAll(query) {
+      let all = [], page = 0;
+      while (true) {
+        const { data, error } = await query.range(page * 1000, page * 1000 + 999);
+        if (error || !data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < 1000) break;
+        page++;
+      }
+      return all;
+    }
+
+    const [ativas, hist] = await Promise.all([
+      fetchAll(db.from('visao_atual').select('uc,em_historico')),
+      fetchAll(db.from('historico').select('*')),
+    ]);
     const ucsComAlerta = new Set((ativas||[]).filter(o=>o.em_historico).map(o=>o.uc));
-    const { data: hist } = await db.from('historico').select('*');
     const hoje=new Date();
     _lista=(hist||[]).filter(h=>{
       if(!h.data_conc)return false;
