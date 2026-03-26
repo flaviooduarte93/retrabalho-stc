@@ -59,7 +59,10 @@ async function carregarStatusBases() {
 
     // 1. Histórico recente — lê metadados dos meses
     const { data: snapMeta } = await db.from('historico_recente_meta').select('*');
-    const mesesRecentes = [...(snapMeta||[])].sort((a,b) => (a.mes_ano||'').localeCompare(b.mes_ano||''));
+    // Filtra 'visao_atual' — tem chip próprio abaixo
+    const mesesRecentes = [...(snapMeta||[])]
+      .filter(m => m.mes_ano !== 'visao_atual')
+      .sort((a,b) => (a.mes_ano||'').localeCompare(b.mes_ano||''));
 
     for (const m of mesesRecentes) {
       const hoje = new Date();
@@ -85,38 +88,40 @@ async function carregarStatusBases() {
       }
     }
 
-    // 2. Visão atual — busca a meta da visão atual
-    const { data: snapAtualCheck } = await db.from('visao_atual').select('ocorrencia').limit(1);
-    if (snapAtualCheck?.length) {
-      const { data: snapSample } = await db.from('visao_atual').select('dt_inicio').limit(20);
-      let maxDate = null;
-      (snapSample||[]).forEach(doc => {
-        const d = doc.dt_inicio ? new Date(doc.dt_inicio) : null;
-        if (d && (!maxDate || d > maxDate)) maxDate = d;
-      });
-      const label = maxDate
-        ? mesAnoLabel(`${maxDate.getFullYear()}-${String(maxDate.getMonth()+1).padStart(2,'0')}`)
-        : 'Mês atual';
+    // 2. Visão atual — busca meta própria da visão atual
+    const { data: visaoMetaRow } = await db
+      .from('historico_recente_meta')
+      .select('*')
+      .eq('mes_ano', 'visao_atual')
+      .maybeSingle();
 
-      // Busca a data de atualização da visão atual via meta
-      const { data: visaoMeta } = await db
-        .from('historico_recente_meta')
-        .select('atualizado_em')
-        .order('atualizado_em', { ascending: false })
-        .limit(1);
-      const visaoTs = visaoMeta?.[0]?.atualizado_em || null;
-
+    if (visaoMetaRow) {
       chips.push(`
         <div class="base-chip chip-visao">
           <span class="chip-dot"></span>
           <div class="chip-info">
             <div class="chip-top">
               <span class="chip-label">Ocorrências Ativas</span>
-              <span class="chip-tag">${label}</span>
+              <span class="chip-count">${visaoMetaRow.total_registros||0} reg.</span>
             </div>
-            ${visaoTs ? `<div class="chip-updated">⏱ ${fmtDateTime(visaoTs)}</div>` : ''}
+            ${visaoMetaRow.atualizado_em ? `<div class="chip-updated">⏱ ${fmtDateTime(visaoMetaRow.atualizado_em)}</div>` : ''}
           </div>
         </div>`);
+    } else {
+      // fallback: verifica se há dados mas sem meta
+      const { data: snapAtualCheck } = await db.from('visao_atual').select('ocorrencia').limit(1);
+      if (snapAtualCheck?.length) {
+        chips.push(`
+          <div class="base-chip chip-visao">
+            <span class="chip-dot"></span>
+            <div class="chip-info">
+              <div class="chip-top">
+                <span class="chip-label">Ocorrências Ativas</span>
+              </div>
+              <div class="chip-updated">Faça um novo upload para registrar o timestamp</div>
+            </div>
+          </div>`);
+      }
     }
 
     // 3. Base histórica
