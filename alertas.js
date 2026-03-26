@@ -196,10 +196,24 @@ async function carregarAlertas(){
     const hoje = new Date();
     const limite90 = new Date(hoje.getTime()-90*86400000).toISOString();
 
-    // Busca ativas e histórico em paralelo
-    const [{ data: ativas }, { data: histData }] = await Promise.all([
-      db.from('visao_atual').select('*'),
-      db.from('historico').select('uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico'),
+
+    // Busca todas as páginas de uma query Supabase (sem limite de 1000)
+    async function fetchAll(query) {
+      let all = [], page = 0;
+      while (true) {
+        const { data, error } = await query.range(page * 1000, page * 1000 + 999);
+        if (error || !data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < 1000) break;
+        page++;
+      }
+      return all;
+    }
+
+    // Busca todas as páginas em paralelo
+    const [ativas, histData] = await Promise.all([
+      fetchAll(db.from('visao_atual').select('*')),
+      fetchAll(db.from('historico').select('uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico')),
     ]);
 
     // Busca F-FINALIZADA procedentes com paginação (evita limite de 1000 linhas do Supabase)
