@@ -154,12 +154,13 @@ async function processHistorico(file) {
   setStatus('status-historico', `⏳ Salvando ${docs.length} UCs...`, 'loading');
   await upsertBatch('historico', docs);
   // Salva meta da base histórica (timestamp de atualização)
-  await db.from('historico_meta').upsert({
-    id: 'principal',
-    atualizado_em: new Date().toISOString(),
-    total_ucs: docs.length,
-    arquivo: file.name
-  });
+  await db.from('historico_meta')
+    .upsert({
+      id: 'principal',
+      atualizado_em: new Date().toISOString(),
+      total_ucs: docs.length,
+      arquivo: file.name
+    }, { onConflict: 'id', ignoreDuplicates: false });
 
   setStatus('status-historico', `✅ ${docs.length} UCs salvas!`, 'success');
 }
