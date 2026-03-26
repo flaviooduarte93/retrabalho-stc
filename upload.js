@@ -259,6 +259,15 @@ async function processAtual(file) {
   await db.from('visao_atual').delete().neq('ocorrencia','__never__');
   await upsertBatch('visao_atual', docs);
 
+  // Salva meta das ocorrências ativas com timestamp
+  await db.from('historico_recente_meta')
+    .upsert({
+      mes_ano: 'visao_atual',
+      arquivo: file.name,
+      total_registros: docs.length,
+      atualizado_em: new Date().toISOString()
+    }, { onConflict: 'mes_ano', ignoreDuplicates: false });
+
   setStatus('status-atual', `✅ ${docs.length} ocorrências ativas salvas!`, 'success');
 }
 
