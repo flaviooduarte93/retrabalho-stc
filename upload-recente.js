@@ -103,12 +103,13 @@ async function processarPlanilhaRecente(file, idx, total) {
   }
 
   // Meta
-  await db.from('historico_recente_meta').upsert({
-    mes_ano: mesAno,
-    arquivo: file.name,
-    total_registros: docs.length,
-    atualizado_em: new Date().toISOString()
-  });
+  await db.from('historico_recente_meta')
+    .upsert({
+      mes_ano: mesAno,
+      arquivo: file.name,
+      total_registros: docs.length,
+      atualizado_em: new Date().toISOString()
+    }, { onConflict: 'mes_ano', ignoreDuplicates: false });
 
   return { mesAno, total: docs.length };
 }
