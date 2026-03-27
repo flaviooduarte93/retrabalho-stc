@@ -1,5 +1,24 @@
 // js/callback.js — Sugestão de Call-Back para UCs com atendimentos improcedentes
 
+// Cópia local de isProcedente (usa a do causas-improcedentes.js se disponível)
+function _cbIsProcedente(causa) {
+  if (typeof isProcedente === 'function') return isProcedente(causa);
+  // fallback inline
+  const IMP = ["ACESSO IMPEDIDO","DISJUNTOR BT CLIENTE DESARMADO","DISJUNTOR MT GRUPO A DESARMADO",
+    "ENCONTRADO ENERGIA CORTADA CLIENTE","ENCONTRADO NORMAL UC","ENDERECO NAO LOCALIZADO",
+    "ILUMINACAO PUBLICA COM DEFEITO","INSTALACAO APOS MEDICAO COM DEFEITO CLIENTE",
+    "PORTEIRA TRANCADA","REDE TELEFONICA TV A CABO"];
+  const KW = [["INSTALAC","APOS","MEDIC","DEFEITO","CLIENTE"],["ILUMINAC","PUBLICA"],
+    ["ENCONTRADO","NORMAL"],["ENCONTRADO","ENERGIA","CORTADA"],["ACESSO","IMPEDIDO"],
+    ["DISJUNTOR","DESARMADO"],["ENDERECO","NAO","LOCALIZADO"],["PORTEIRA","TRANCADA"],["REDE","TELEFON"]];
+  const norm = s => String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+  const c = norm(causa);
+  if (!c || c === '----') return false;
+  if (IMP.some(i => c === norm(i) || c.includes(norm(i)) || norm(i).includes(c))) return false;
+  if (KW.some(kws => kws.every(kw => c.includes(kw)))) return false;
+  return true;
+}
+
 function fmtDate(iso) {
   if (!iso) return '----';
   return new Date(iso).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -61,7 +80,7 @@ function renderLista() {
     const urgencia = dias !== null && dias <= 7 ? 'urgente' : dias !== null && dias <= 30 ? 'recente' : 'normal';
 
     const atendRows = h.historico.map((at, i) => {
-      const imp = !isProcedente(at.causa);
+      const imp = !_cbIsProcedente(at.causa);
       return `<tr class="${imp ? 'row-improcedente' : ''}">
         <td><span class="atend-num-badge" style="background:${imp?'var(--eq-gray-400)':'var(--eq-blue)'}">${i+1}</span></td>
         <td><strong>${at.os||'----'}</strong></td>
@@ -109,7 +128,7 @@ function renderLista() {
       <div class="callback-body">
         <div class="callback-causas">
           ${h.historico.slice(-3).reverse().map(at => {
-            const imp = !isProcedente(at.causa);
+            const imp = !_cbIsProcedente(at.causa);
             return `<span class="callback-causa-chip ${imp ? 'chip-imp' : 'chip-proc'}">
               ${imp ? '✗' : '✓'} ${(at.causa||'----').substring(0,35)}${(at.causa||'').length>35?'…':''}
               <span style="opacity:.6;font-size:.65rem;margin-left:4px">${fmtDateShort(at.data_conc||at.data_origem)}</span>
@@ -170,7 +189,7 @@ async function carregar() {
       // Conta quantos dos últimos atendimentos são improcedentes (de trás para frente)
       let qtdImprocedentes = 0;
       for (let i = atends.length - 1; i >= 0; i--) {
-        if (!isProcedente(atends[i].causa)) qtdImprocedentes++;
+        if (!_cbIsProcedente(atends[i].causa)) qtdImprocedentes++;
         else break; // para no primeiro procedente
       }
 
