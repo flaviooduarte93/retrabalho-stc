@@ -105,7 +105,7 @@ function renderLista() {
           </div>
           <div class="callback-meta">
             ${h.qtdAtendimentos} atendimento(s) total ·
-            <strong>${h.qtdImprocedentes}</strong> improcedente(s) consecutivo(s) no final
+            último atendimento improcedente${h.qtdImprocedentes > 1 ? ` · ${h.qtdImprocedentes} consecutivos` : ''}
           </div>
         </div>
         <div class="callback-header-right">
@@ -171,38 +171,62 @@ async function carregar() {
       return all;
     }
 
-    const hist = await fetchAll(
-      db.from('historico').select('uc,qtd_atendimentos,historico,prefixo,causa')
-    );
+    // Busca histórico completo: base histórica + histórico recente (finalizados)
+    const [hist, recenteRaw] = await Promise.all([
+      fetchAll(db.from('historico').select('uc,qtd_atendimentos,historico,prefixo,causa')),
+      fetchAll(db.from('historico_recente').select('uc,ocorrencia,dt_inicio,dt_fim,equipe,causa,procedente').eq('finalizado', true))
+    ]);
 
-    // Filtra UCs onde os ÚLTIMOS atendimentos (com data_conc) são improcedentes
-    // Critério: pelo menos os 2 últimos atendimentos procedentes são improcedentes
+    // Agrupa histórico recente por UC
+    const recenteMap = {};
+    for (const r of recenteRaw) {
+      if (!recenteMap[r.uc]) recenteMap[r.uc] = [];
+      recenteMap[r.uc].push({
+        os:          r.ocorrencia,
+        data_origem: r.dt_inicio,
+        data_conc:   r.dt_fim,
+        prefixo:     r.equipe || '----',
+        causa:       r.causa  || '----',
+      });
+    }
+
     _lista = [];
 
     for (const h of hist) {
-      const atends = (h.historico || [])
-        .filter(a => a.data_conc) // só finalizados
+      // Atendimentos da base histórica
+      const atendHist = (h.historico || [])
+        .filter(a => a.data_conc)
+        .map(a => ({ ...a, fonte: 'historico' }));
+
+      // Atendimentos do histórico recente (não duplicar os que já estão na base)
+      const osVistas = new Set(atendHist.map(a => a.os));
+      const atendRecente = (recenteMap[h.uc] || [])
+        .filter(a => a.data_conc && !osVistas.has(a.os))
+        .map(a => ({ ...a, fonte: 'recente' }));
+
+      // Une e ordena cronologicamente
+      const atends = [...atendHist, ...atendRecente]
         .sort((a, b) => (a.data_origem||'') > (b.data_origem||'') ? 1 : -1);
 
-      if (atends.length < 2) continue; // precisa de pelo menos 2 finalizados
+      if (atends.length < 1) continue;
 
-      // Conta quantos dos últimos atendimentos são improcedentes (de trás para frente)
+      // Verifica se o ÚLTIMO atendimento (de qualquer base) é improcedente
+      const ultimoFinalizado = atends[atends.length - 1];
+      if (_cbIsProcedente(ultimoFinalizado.causa)) continue;
+
+      // Conta consecutivos improcedentes no final
       let qtdImprocedentes = 0;
       for (let i = atends.length - 1; i >= 0; i--) {
         if (!_cbIsProcedente(atends[i].causa)) qtdImprocedentes++;
-        else break; // para no primeiro procedente
+        else break;
       }
 
-      if (qtdImprocedentes < 2) continue; // exige pelo menos 2 improcedentes consecutivos no final
-
-      const ultimoAtend = atends[atends.length - 1];
-
       _lista.push({
-        uc:               h.uc,
-        qtdAtendimentos:  h.qtd_atendimentos || atends.length,
+        uc:              h.uc,
+        qtdAtendimentos: Math.max(h.qtd_atendimentos || 0, atends.length),
         qtdImprocedentes,
-        ultimoAtend,
-        historico:        atends,
+        ultimoAtend:     ultimoFinalizado,
+        historico:       atends,
       });
     }
 
