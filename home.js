@@ -108,7 +108,7 @@ async function carregarStatusBases() {
           </div>
         </div>`);
     } else {
-      // fallback: verifica se há dados mas sem meta
+      // Sem meta ainda — mostra chip sem timestamp se houver dados
       const { data: snapAtualCheck } = await db.from('visao_atual').select('ocorrencia').limit(1);
       if (snapAtualCheck?.length) {
         chips.push(`
@@ -117,8 +117,8 @@ async function carregarStatusBases() {
             <div class="chip-info">
               <div class="chip-top">
                 <span class="chip-label">Ocorrências Ativas</span>
+                <span class="chip-tag">Carregado</span>
               </div>
-              <div class="chip-updated">Faça um novo upload para registrar o timestamp</div>
             </div>
           </div>`);
       }
