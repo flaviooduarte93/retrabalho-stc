@@ -1,231 +1,279 @@
-// js/pesquisa.js — Supabase version
+// js/callback.js — Sugestão de Call-Back para UCs com atendimentos improcedentes
 
-// ===== CAUSAS IMPROCEDENTES (local) =====
-const _CAUSAS_IMP_NORM=['ACESSO IMPEDIDO','DISJUNTOR BT CLIENTE DESARMADO','DISJUNTOR MT GRUPO A DESARMADO','ENCONTRADO ENERGIA CORTADA CLIENTE','ENCONTRADO NORMAL UC','ENDERECO NAO LOCALIZADO','ILUMINACAO PUBLICA COM DEFEITO','INSTALACAO APOS MEDICAO COM DEFEITO CLIENTE','PORTEIRA TRANCADA','REDE TELEFONICA TV A CABO','DISJUNTOR BT CLIENTE COM DEFEITO','RAMAL DE ENTRADA COM DEFEITO CLIENTE'];
-const _CAUSAS_KW=[['INSTALAC','APOS','MEDIC','DEFEITO','CLIENTE'],['ILUMINAC','PUBLICA'],['ENCONTRADO','NORMAL'],['ENCONTRADO','ENERGIA','CORTADA'],['ACESSO','IMPEDIDO'],['DISJUNTOR','DESARMADO'],['ENDERECO','NAO','LOCALIZADO'],['PORTEIRA','TRANCADA'],['REDE','TELEFON'],
-    ['DISJUNTOR','BT','CLIENTE','COM','DEFEITO'],
-    ['RAMAL','ENTRADA','DEFEITO','CLIENTE']];
-function _norm(s){if(!s)return'';let r=String(s).toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');r=r.replace(/[^A-Z0-9]+/g,' ');return r.trim().replace(/\s+/g,' ');}
-function _isProcedente(causa){const c=_norm(causa);if(!c||c==='----')return false;if(_CAUSAS_IMP_NORM.some(i=>c===i||c.includes(i)||i.includes(c)))return false;if(_CAUSAS_KW.some(kws=>kws.every(kw=>c.includes(kw))))return false;return true;}
-
-function fmtDate(iso){if(!iso)return'----';return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
-function fmtDateShort(iso){if(!iso)return'----';return new Date(iso).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
-function calcRetrabalho(dc){if(!dc)return false;return new Date()<=new Date(new Date(dc).getTime()+91*86400000);}
-
-// ===== GANTT =====
-function renderGantt(historico){
-  if(!historico||!historico.length)return'';
-  const sorted=[...historico].filter(h=>h.data_origem||h.dataOrigem).map(h=>({...h,data_origem:h.data_origem||h.dataOrigem,data_conc:h.data_conc||h.dataConc})).sort((a,b)=>new Date(a.data_origem)-new Date(b.data_origem));
-  if(!sorted.length)return'';
-  const minDate=new Date(sorted[0].data_origem);
-  const maxDate=new Date(sorted[sorted.length-1].data_origem);
-  minDate.setDate(minDate.getDate()-7); maxDate.setDate(maxDate.getDate()+7);
-  const totalMs=maxDate-minDate||1;
-  const ticks=[];
-  for(let i=0;i<=5;i++) ticks.push(new Date(minDate.getTime()+totalMs*i/5).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'}));
-
-  const markers=sorted.map((h,i)=>{
-    const pos=((new Date(h.data_origem)-minDate)/totalMs*100).toFixed(2);
-    let isRet=false;
-    if(i>0){const curr=new Date(h.data_origem);for(let j=i-1;j>=0;j--){const ant=sorted[j];if(_isProcedente(ant.causa||ant.prefixo)&&(ant.data_conc||ant.dataConc)){const janela=new Date(new Date(ant.data_conc||ant.dataConc).getTime()+90*86400000);isRet=curr<=janela;break;}}}
-    const color=isRet?'var(--eq-red)':'var(--eq-blue)';
-    const causaTip=(h.causa||'----').substring(0,45)+((h.causa||'').length>45?'…':'');
-    let diasBadge='';
-    if(i<sorted.length-1){const next=new Date(sorted[i+1].data_origem);const dias=Math.round((next-new Date(h.data_origem))/86400000);const midPos=(((new Date(h.data_origem)-minDate)/totalMs*100+(next-minDate)/totalMs*100)/2).toFixed(2);diasBadge=`<div class="tl-dias-badge" style="left:${midPos}%">${dias}d</div>`;}
-    return `<div class="tl-marker-wrap" style="left:${pos}%"><div class="tl-dot" style="background:${color};border-color:${color}"><span class="tl-dot-num">${i+1}</span><div class="tl-tooltip"><div class="tl-tooltip-num">Atendimento ${i+1}</div><div class="tl-tooltip-os">${h.os||'----'}</div><div class="tl-tooltip-row">📋 ${causaTip}</div><div class="tl-tooltip-row">▶ ${fmtDate(h.data_origem)}</div><div class="tl-tooltip-row">■ ${fmtDate(h.data_conc)}</div></div></div></div>${diasBadge}`;
-  }).join('');
-
-  return `<div class="gantt-section"><div class="gantt-title">Linha do Tempo de Atendimentos</div><div class="gantt-container"><div class="tl-chart"><div class="tl-line"></div>${markers}</div><div class="gantt-axis" style="margin-top:8px">${ticks.map(t=>`<div class="gantt-tick">${t}</div>`).join('')}</div></div></div>`;
+// Cópia local de isProcedente (usa a do causas-improcedentes.js se disponível)
+function _cbIsProcedente(causa) {
+  if (typeof isProcedente === 'function') return isProcedente(causa);
+  // fallback inline
+  const IMP = ["ACESSO IMPEDIDO","DISJUNTOR BT CLIENTE DESARMADO","DISJUNTOR MT GRUPO A DESARMADO",
+    "ENCONTRADO ENERGIA CORTADA CLIENTE","ENCONTRADO NORMAL UC","ENDERECO NAO LOCALIZADO",
+    "ILUMINACAO PUBLICA COM DEFEITO","INSTALACAO APOS MEDICAO COM DEFEITO CLIENTE",
+    "PORTEIRA TRANCADA","REDE TELEFONICA TV A CABO",
+  "DISJUNTOR BT CLIENTE COM DEFEITO",
+  "RAMAL DE ENTRADA COM DEFEITO CLIENTE"];
+  const KW = [["INSTALAC","APOS","MEDIC","DEFEITO","CLIENTE"],["ILUMINAC","PUBLICA"],
+    ["ENCONTRADO","NORMAL"],["ENCONTRADO","ENERGIA","CORTADA"],["ACESSO","IMPEDIDO"],
+    ["DISJUNTOR","DESARMADO"],["ENDERECO","NAO","LOCALIZADO"],["PORTEIRA","TRANCADA"],["REDE","TELEFON"],
+    ["DISJUNTOR","BT","CLIENTE","COM","DEFEITO"],
+    ["RAMAL","ENTRADA","DEFEITO","CLIENTE"]];
+  const norm = s => String(s||'').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^A-Z0-9]+/g,' ').trim().replace(/\s+/g,' ');
+  const c = norm(causa);
+  if (!c || c === '----') return false;
+  if (IMP.some(i => c === norm(i) || c.includes(norm(i)) || norm(i).includes(c))) return false;
+  if (KW.some(kws => kws.every(kw => c.includes(kw)))) return false;
+  return true;
 }
 
-// ===== TABELA =====
-function renderTabela(historico){
-  if(!historico||!historico.length)return'';
-  const sorted=[...historico].map(h=>({...h,data_origem:h.data_origem||h.dataOrigem,data_conc:h.data_conc||h.dataConc})).sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
-  const rows=sorted.map((h,i)=>{
-    let diasDesde='----';
-    if(i>0){const dias=Math.round((new Date(h.data_origem)-new Date(sorted[i-1].data_origem))/86400000);diasDesde=`<span class="dias-entre-badge">${dias}d após atend. ${i}</span>`;}
-    // Ocorrência sem data_fim = ainda ativa, não classifica como improcedente
-    const ativa = !h.data_conc;
-    const proc  = ativa ? true : _isProcedente(h.causa);
-    let isRet=false;
-    if(i>0&&!ativa){const curr=new Date(h.data_origem);for(let j=i-1;j>=0;j--){const ant=sorted[j];if(_isProcedente(ant.causa)&&ant.data_conc){isRet=curr<=new Date(new Date(ant.data_conc).getTime()+90*86400000);break;}}}
-    const tipo = ativa?'ativa':!proc?'improcedente':isRet?'retrabalho':i===0?'primeiro':'procedente';
-    const rowClass={'ativa':'row-primeiro','improcedente':'row-improcedente','retrabalho':'row-retrabalho','primeiro':'row-primeiro','procedente':'row-primeiro'}[tipo];
-    const numColor={'ativa':'var(--eq-blue-mid)','improcedente':'var(--eq-gray-400)','retrabalho':'var(--eq-red)','primeiro':'var(--eq-blue)','procedente':'var(--eq-blue)'}[tipo];
-    const tipoLabel={'ativa':'🔵 Ativa','improcedente':'✗ Improcedente','retrabalho':'↩ Retrabalho','primeiro':'1º Atend.','procedente':'✓ Procedente'}[tipo];
-    return `<tr class="${rowClass}" data-tipo="${tipo}"><td><span class="atend-num-badge" style="background:${numColor}">${i+1}</span></td><td><strong>${h.os||'----'}</strong></td><td>${fmtDate(h.data_origem)}</td><td>${fmtDate(h.data_conc)}</td><td>${h.prefixo||'----'}</td><td>${h.causa||'----'}</td><td><span class="tipo-badge tipo-${tipo}">${tipoLabel}</span></td><td>${diasDesde}</td></tr>`;
-  }).join('');
-
-  return `<div style="margin-top:24px">
-    <div style="margin-bottom:12px">
-      <div class="gantt-title" style="margin-bottom:0">Todos os Atendimentos</div>
-    </div>
-    <div class="historico-table-wrap"><table class="historico-table"><thead><tr>
-      <th style="width:40px">#</th><th>OS</th><th>Data Início</th><th>Data Fim</th><th>Equipe</th><th>Causa</th><th>Tipo</th><th>Intervalo</th>
-    </tr></thead><tbody>${rows}</tbody></table></div></div>`;
+function fmtDate(iso) {
+  if (!iso) return '----';
+  return new Date(iso).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+function fmtDateShort(iso) {
+  if (!iso) return '----';
+  return new Date(iso).toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function diasDesde(iso) {
+  if (!iso) return null;
+  return Math.floor((new Date() - new Date(iso)) / 86400000);
 }
 
-// ===== PESQUISA =====
-async function pesquisarUC(uc){
-  const res=document.getElementById('resultado');
-  res.innerHTML=`<div class="loading-state"><div class="spinner"></div><br>Consultando todas as bases...</div>`;
-  uc=uc.trim();
-  if(!uc){res.innerHTML=`<div class="no-results"><p>Digite uma UC.</p></div>`;return;}
+let _lista = [], _criterio = 'mais-imp', _filtro = '';
 
-  try {
-    const ucSanitized = uc.replace(/[\/\s]+/g,'_').trim();
+function filtrarUC(v) {
+  _filtro = v;
+  const c = document.getElementById('filtro-clear');
+  if (c) c.style.display = v ? 'flex' : 'none';
+  renderLista();
+}
+function limparFiltro() {
+  _filtro = '';
+  const i = document.getElementById('filtro-uc');
+  if (i) i.value = '';
+  const c = document.getElementById('filtro-clear');
+  if (c) c.style.display = 'none';
+  renderLista();
+}
+function ordenar(criterio) {
+  _criterio = criterio;
+  document.querySelectorAll('.sort-btn').forEach(b => b.classList.remove('sort-btn--active'));
+  document.getElementById('sort-' + criterio)?.classList.add('sort-btn--active');
+  renderLista();
+}
 
-    // Tenta encontrar a UC com diferentes variações do ID
-    // (pode ter sido sanitizado de formas diferentes no upload)
-    const ucVariants = [...new Set([ucSanitized, uc.trim()])];
+function renderLista() {
+  let lista = [..._lista];
+  if (_filtro.trim()) lista = lista.filter(h => h.uc.toLowerCase().includes(_filtro.trim().toLowerCase()));
 
-    // Busca em paralelo todas as variações
-    let histDoc = null, recenteDocs = [], ativasDocs = [];
-    for (const ucVar of ucVariants) {
-      const [h, r, a] = await Promise.all([
-        db.from('historico').select('*').eq('uc', ucVar).maybeSingle(),
-        db.from('historico_recente').select('*').eq('uc', ucVar),
-        db.from('visao_atual').select('*').eq('uc', ucVar)
-      ]);
-      if (h.data && !histDoc) histDoc = h.data;
-      if (r.data?.length) recenteDocs = [...recenteDocs, ...r.data];
-      if (a.data?.length) ativasDocs = [...ativasDocs, ...a.data];
-    }
-    // Remove duplicatas por ocorrencia/id
-    recenteDocs = recenteDocs.filter((r,i,arr)=>arr.findIndex(x=>x.id===r.id)===i);
-    ativasDocs  = ativasDocs.filter((a,i,arr)=>arr.findIndex(x=>x.ocorrencia===a.ocorrencia)===i);
+  if (_criterio === 'mais-imp') lista.sort((a, b) => b.qtdImprocedentes - a.qtdImprocedentes);
+  if (_criterio === 'recente')  lista.sort((a, b) => (b.ultimoAtend?.data_conc||'') > (a.ultimoAtend?.data_conc||'') ? 1 : -1);
+  if (_criterio === 'uc')       lista.sort((a, b) => a.uc.localeCompare(b.uc));
 
-    if(!histDoc && !recenteDocs?.length && !ativasDocs?.length){
-      res.innerHTML=`<div class="no-results"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="28" stroke="#C8D6E5" stroke-width="2"/><path d="M20 30h20M30 20v20" stroke="#C8D6E5" stroke-width="2" stroke-linecap="round"/></svg><p>UC <strong>${uc}</strong> não encontrada em nenhuma base.</p></div>`;
-      return;
-    }
+  const counter = document.getElementById('filtro-count');
+  if (counter) counter.textContent = lista.length + ' UC' + (lista.length !== 1 ? 's' : '');
 
-    // Monta histórico unificado com deduplicação
-    // Chave: número final da OS + mês/ano da data_origem
-    function chaveOS(osStr, dataStr) {
-      const num = String(osStr||'').trim().replace(/^\d{4}-\d+-/, '');
-      if (!dataStr) return String(osStr||'').trim();
-      const d = new Date(dataStr);
-      if (isNaN(d)) return String(osStr||'').trim();
-      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${num}`;
-    }
-    function duracao(h) {
-      if (!h.data_origem || !h.data_conc) return 0;
-      return new Date(h.data_conc) - new Date(h.data_origem);
-    }
+  const el = document.getElementById('callback-container');
+  if (!lista.length) {
+    el.innerHTML = `<div class="no-results" style="padding:48px 0">
+      <p>Nenhuma UC encontrada com últimos atendimentos improcedentes.</p>
+    </div>`;
+    return;
+  }
 
-    const historicoBase=histDoc?(histDoc.historico||[]):[];
+  el.innerHTML = `<div class="callback-list">${lista.map(h => {
+    const dias = diasDesde(h.ultimoAtend?.data_conc);
+    const diasStr = dias !== null ? `${dias}d atrás` : '----';
+    const urgencia = dias !== null && dias <= 7 ? 'urgente' : dias !== null && dias <= 30 ? 'recente' : 'normal';
 
-    const recentesFinalizados=(recenteDocs||[])
-      .filter(r=>r.finalizado&&r.dt_fim)
-      .map(r=>({os:r.ocorrencia,data_origem:r.dt_inicio,data_conc:r.dt_fim,prefixo:r.equipe||'----',causa:r.causa||'----',fonte:'recente'}));
+    const atendRows = h.historico.map((at, i) => {
+      const imp = !_cbIsProcedente(at.causa);
+      return `<tr class="${imp ? 'row-improcedente' : ''}">
+        <td><span class="atend-num-badge" style="background:${imp?'var(--eq-gray-400)':'var(--eq-blue)'}">${i+1}</span></td>
+        <td><strong>${at.os||'----'}</strong></td>
+        <td>${fmtDate(at.data_origem)}</td>
+        <td>${fmtDate(at.data_conc)}</td>
+        <td>${at.prefixo||'----'}</td>
+        <td>${at.causa||'----'}</td>
+        <td>${imp
+          ? '<span class="badge-improcedente" style="font-size:.68rem">✗ Improcedente</span>'
+          : '<span class="badge-procedente" style="font-size:.68rem">✓ Procedente</span>'}</td>
+      </tr>`;
+    }).join('');
 
-    const ativasFormatadas=(ativasDocs||[])
-      .map(a=>({os:a.ocorrencia,data_origem:a.dt_inicio,data_conc:a.dt_fim||null,prefixo:a.equipe||'----',causa:a.causa||'----',fonte:'ativa',estado:a.estado}));
-
-    // Deduplicação: agrupa por chave, mantém maior duração
-    const deduMap = {};
-    for (const h of [...historicoBase, ...recentesFinalizados, ...ativasFormatadas]) {
-      const k = chaveOS(h.os, h.data_origem);
-      if (!deduMap[k] || duracao(h) > duracao(deduMap[k])) deduMap[k] = h;
-    }
-    const historicoCompleto = Object.values(deduMap).sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
-
-    const ultimoComConc=[...historicoCompleto].filter(h=>h.data_conc).sort((a,b)=>(b.data_conc||'')>(a.data_conc||'')?1:-1)[0];
-    const ultimoGeral=historicoCompleto[historicoCompleto.length-1]||{};
-    const dataConc=ultimoComConc?.data_conc||null;
-
-    // "EM RETRABALHO" só se houver 2+ atendimentos procedentes dentro de 90 dias entre si
-    // Caso contrário, é "Dentro da Janela" (pode virar retrabalho se tiver nova ocorrência)
-    const procedentesComData = historicoCompleto.filter(h => h.data_conc && _isProcedente(h.causa));
-    let isRet = false;
-    for (let i = 1; i < procedentesComData.length; i++) {
-      const ant = procedentesComData[i-1];
-      const cur = procedentesComData[i];
-      const diff = (new Date(cur.data_origem) - new Date(ant.data_conc)) / 86400000;
-      if (diff <= 90) { isRet = true; break; }
-    }
-    // Se tem ocorrência ativa + procedente anterior dentro de 90 dias → possível retrabalho
-    const temAtiva = historicoCompleto.some(h => !h.data_conc);
-    const ultimoProcedente = procedentesComData[procedentesComData.length-1];
-    const isPossivel = !isRet && temAtiva && ultimoProcedente && calcRetrabalho(ultimoProcedente.data_conc);
-    const fim90=dataConc?new Date(new Date(dataConc).getTime()+91*86400000):null;
-    const diasR=fim90?Math.ceil((fim90-new Date())/86400000):null;
-
-    const fontes=[];
-    if(histDoc) fontes.push('Base Histórica');
-    if(recentesFinalizados.length) fontes.push('Histórico Recente');
-    if(ativasFormatadas.length) fontes.push('Ocorrências Ativas');
-
-    res.innerHTML=`
-      <div class="result-card">
-        <div class="result-header">
-          <div class="result-uc">UC ${uc}</div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-            ${isRet
-              ? `<span class="badge-retrabalho">⚠ Em Retrabalho</span>`
-              : isPossivel
-                ? `<span class="badge-retrabalho" style="background:var(--eq-amber-dark)">⚠ Possível Retrabalho</span>`
-                : calcRetrabalho(dataConc)
-                  ? `<span class="badge-ok" style="background:var(--eq-blue)">🕐 Na Janela de 90 dias</span>`
-                  : `<span class="badge-ok">✓ Fora do Período</span>`
-            }
-            ${ativasFormatadas.length?`<span class="badge badge-amber">🔴 ${ativasFormatadas.length} ativa(s)</span>`:''}
+    return `<div class="callback-card urgencia-${urgencia}">
+      <div class="callback-header">
+        <div class="callback-header-left">
+          <div class="callback-uc">
+            <a href="pesquisa.html?uc=${encodeURIComponent(h.uc)}&from=callback"
+               style="color:var(--eq-blue-dark);text-decoration:none;font-weight:800;font-size:1.05rem">
+              UC ${h.uc}
+            </a>
+          </div>
+          <div class="callback-meta">
+            ${h.qtdAtendimentos} atendimento(s) total ·
+            último atendimento improcedente${h.qtdImprocedentes > 1 ? ` · ${h.qtdImprocedentes} consecutivos` : ''}
           </div>
         </div>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:16px">
-          ${fontes.map(f=>`<span style="font-size:.7rem;background:var(--eq-blue-pale);color:var(--eq-blue-dark);padding:2px 10px;border-radius:20px;font-weight:600">📂 ${f}</span>`).join('')}
-        </div>
-        <div class="info-grid">
-          <div class="info-item"><div class="info-label">Total de Atendimentos</div><div class="info-value highlight">${historicoCompleto.length}</div></div>
-          <div class="info-item"><div class="info-label">Última OS</div><div class="info-value">${ultimoGeral.os||'----'}</div></div>
-          <div class="info-item"><div class="info-label">Data Início</div><div class="info-value">${fmtDate(ultimoGeral.data_origem)}</div></div>
-          <div class="info-item"><div class="info-label">Data Fim</div><div class="info-value">${fmtDate(ultimoGeral.data_conc)}</div></div>
-          <div class="info-item"><div class="info-label">Equipe</div><div class="info-value">${ultimoGeral.prefixo||'----'}</div></div>
-          <div class="info-item"><div class="info-label">Causa</div><div class="info-value">${ultimoGeral.causa||'----'}</div></div>
-          ${fim90?`<div class="info-item"><div class="info-label">Sai do Retrabalho</div><div class="info-value" style="color:${isRet?'var(--eq-red)':'var(--eq-green)'}">
-            ${fmtDateShort(fim90.toISOString())} <span style="font-size:.8rem;font-weight:400;margin-left:6px">(${diasR>0?diasR+'d restantes':'encerrado'})</span>
-          </div></div>`:''}
+        <div class="callback-header-right">
+          <div class="callback-urgencia-badge urgencia-${urgencia}">
+            ${urgencia === 'urgente' ? '🔴 Urgente' : urgencia === 'recente' ? '🟡 Recente' : '⚪ Normal'}
+          </div>
+          <div class="callback-dias">
+            <span class="callback-dias-num">${dias !== null ? dias : '?'}</span>
+            <span class="callback-dias-label">dias desde<br>último atend.</span>
+          </div>
+          <div class="callback-sugestao">
+            📞 <strong>Call-Back sugerido</strong>
+            <div style="font-size:.72rem;color:var(--eq-gray-600);margin-top:2px">
+              Último: ${fmtDateShort(h.ultimoAtend?.data_conc)} · ${h.ultimoAtend?.prefixo||'----'}
+            </div>
+          </div>
         </div>
       </div>
-      ${renderGantt(historicoCompleto)}
-      ${renderTabela(historicoCompleto)}`;
 
-  } catch(err){
+      <div class="callback-body">
+        <div class="callback-causas">
+          ${h.historico.slice(-3).reverse().map(at => {
+            const imp = !_cbIsProcedente(at.causa);
+            return `<span class="callback-causa-chip ${imp ? 'chip-imp' : 'chip-proc'}">
+              ${imp ? '✗' : '✓'} ${(at.causa||'----').substring(0,35)}${(at.causa||'').length>35?'…':''}
+              <span style="opacity:.6;font-size:.65rem;margin-left:4px">${fmtDateShort(at.data_conc||at.data_origem)}</span>
+            </span>`;
+          }).join('')}
+        </div>
+
+        <details class="callback-details">
+          <summary>Ver histórico completo (${h.historico.length} atendimentos)</summary>
+          <div class="historico-table-wrap" style="margin-top:12px">
+            <table class="historico-table">
+              <thead><tr>
+                <th>#</th><th>OS</th><th>Data Início</th><th>Data Fim</th>
+                <th>Equipe</th><th>Causa</th><th>Tipo</th>
+              </tr></thead>
+              <tbody>${atendRows}</tbody>
+            </table>
+          </div>
+        </details>
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+
+async function carregar() {
+  document.getElementById('callback-container').innerHTML =
+    `<div class="loading-state"><div class="spinner"></div><br>Analisando histórico...</div>`;
+
+  try {
+    // Busca toda a base histórica com paginação
+    async function fetchAll(query) {
+      let all = [], page = 0;
+      while (true) {
+        const { data } = await query.range(page * 1000, page * 1000 + 999);
+        if (!data || data.length === 0) break;
+        all = all.concat(data);
+        if (data.length < 1000) break;
+        page++;
+      }
+      return all;
+    }
+
+    // Busca histórico completo: base histórica + histórico recente (finalizados)
+    const [hist, recenteRaw] = await Promise.all([
+      fetchAll(db.from('historico').select('uc,qtd_atendimentos,historico,prefixo,causa')),
+      fetchAll(db.from('historico_recente').select('uc,ocorrencia,dt_inicio,dt_fim,equipe,causa,procedente').eq('finalizado', true))
+    ]);
+
+    // Agrupa histórico recente por UC
+    const recenteMap = {};
+    for (const r of recenteRaw) {
+      if (!recenteMap[r.uc]) recenteMap[r.uc] = [];
+      recenteMap[r.uc].push({
+        os:          r.ocorrencia,
+        data_origem: r.dt_inicio,
+        data_conc:   r.dt_fim,
+        prefixo:     r.equipe || '----',
+        causa:       r.causa  || '----',
+      });
+    }
+
+    _lista = [];
+
+    for (const h of hist) {
+      // Atendimentos da base histórica
+      const atendHist = (h.historico || [])
+        .filter(a => a.data_conc)
+        .map(a => ({ ...a, fonte: 'historico' }));
+
+      // Atendimentos do histórico recente (não duplicar os que já estão na base)
+      const osVistas = new Set(atendHist.map(a => a.os));
+      const atendRecente = (recenteMap[h.uc] || [])
+        .filter(a => a.data_conc && !osVistas.has(a.os))
+        .map(a => ({ ...a, fonte: 'recente' }));
+
+      // Une e ordena cronologicamente
+      const atends = [...atendHist, ...atendRecente]
+        .sort((a, b) => (a.data_origem||'') > (b.data_origem||'') ? 1 : -1);
+
+      if (atends.length < 1) continue;
+
+      // Verifica se o ÚLTIMO atendimento (de qualquer base) é improcedente
+      const ultimoFinalizado = atends[atends.length - 1];
+      if (_cbIsProcedente(ultimoFinalizado.causa)) continue;
+
+      // Conta consecutivos improcedentes no final
+      let qtdImprocedentes = 0;
+      for (let i = atends.length - 1; i >= 0; i--) {
+        if (!_cbIsProcedente(atends[i].causa)) qtdImprocedentes++;
+        else break;
+      }
+
+      _lista.push({
+        uc:              h.uc,
+        qtdAtendimentos: Math.max(h.qtd_atendimentos || 0, atends.length),
+        qtdImprocedentes,
+        ultimoAtend:     ultimoFinalizado,
+        historico:       atends,
+      });
+    }
+
+    // Stats
+    const urgentes = _lista.filter(h => {
+      const d = diasDesde(h.ultimoAtend?.data_conc);
+      return d !== null && d <= 7;
+    }).length;
+    const recentes = _lista.filter(h => {
+      const d = diasDesde(h.ultimoAtend?.data_conc);
+      return d !== null && d > 7 && d <= 30;
+    }).length;
+
+    document.getElementById('stats-container').innerHTML = `
+      <div class="alert-stats" style="margin-bottom:24px">
+        <div class="stat-card danger">
+          <div class="stat-value">${_lista.length}</div>
+          <div class="stat-label">UCs para Call-Back</div>
+        </div>
+        <div class="stat-card danger" style="border-color:#b71c1c">
+          <div class="stat-value">${urgentes}</div>
+          <div class="stat-label">🔴 Urgente (≤ 7 dias)</div>
+        </div>
+        <div class="stat-card warning">
+          <div class="stat-value">${recentes}</div>
+          <div class="stat-label">🟡 Recente (8–30 dias)</div>
+        </div>
+        <div class="stat-card info">
+          <div class="stat-value">${_lista.length - urgentes - recentes}</div>
+          <div class="stat-label">⚪ Normal (> 30 dias)</div>
+        </div>
+      </div>`;
+
+    renderLista();
+
+  } catch(err) {
     console.error(err);
-    res.innerHTML=`<div class="no-results"><p>Erro: ${err.message}</p></div>`;
+    document.getElementById('callback-container').innerHTML =
+      `<div class="no-results"><p>Erro: ${err.message}</p></div>`;
   }
 }
 
-document.addEventListener('DOMContentLoaded',()=>{
-  const btn=document.getElementById('search-btn');
-  const input=document.getElementById('search-input');
-  btn.addEventListener('click',()=>pesquisarUC(input.value));
-  input.addEventListener('keydown',e=>{if(e.key==='Enter')pesquisarUC(input.value);});
-
-  // Breadcrumb
-  const params=new URLSearchParams(window.location.search);
-  const uc=params.get('uc'), from=params.get('from');
-  const nav=document.getElementById('topbar-nav');
-  const origens={alertas:{label:'Alertas',href:'alertas.html'},detalhamento:{label:'UCs em Retrabalho',href:'detalhamento.html'}};
-  if(nav){
-    const o=origens[from];
-    nav.innerHTML=o
-      ?`<a href="index.html" class="topbar-navitem">Início</a><span class="topbar-navsep">›</span><a href="${o.href}" class="topbar-navitem topbar-navitem--active">${o.label}</a><span class="topbar-navsep">›</span><span class="topbar-navitem topbar-navitem--current">Pesquisa</span>`
-      :`<a href="index.html" class="topbar-navitem">Início</a><span class="topbar-navsep">›</span><span class="topbar-navitem topbar-navitem--current">Pesquisa</span>`;
-  }
-
-  document.addEventListener('mousemove',e=>{
-    const tt=document.querySelector('.tl-dot:hover .tl-tooltip');
-    if(!tt)return;
-    const tw=220,margin=12;
-    let x=e.clientX-tw/2, y=e.clientY-120-margin;
-    if(x+tw>window.innerWidth-8)x=window.innerWidth-tw-8;
-    if(x<8)x=8;
-    if(y<8)y=e.clientY+margin;
-    tt.style.left=x+'px'; tt.style.top=y+'px';
-  });
-
-  if(uc){input.value=uc; pesquisarUC(uc);}
+document.addEventListener('DOMContentLoaded', () => {
+  carregar();
+  document.getElementById('btn-refresh')?.addEventListener('click', carregar);
 });
