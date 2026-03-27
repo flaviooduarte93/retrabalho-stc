@@ -175,11 +175,15 @@ async function carregar() {
       return all;
     }
 
-    // Busca histórico completo: base histórica + histórico recente (finalizados)
-    const [hist, recenteRaw] = await Promise.all([
+    // Busca apenas UCs com ocorrência ATIVA no momento + histórico completo
+    const [hist, recenteRaw, ativasRaw] = await Promise.all([
       fetchAll(db.from('historico').select('uc,qtd_atendimentos,historico,prefixo,causa')),
-      fetchAll(db.from('historico_recente').select('uc,ocorrencia,dt_inicio,dt_fim,equipe,causa,procedente').eq('finalizado', true))
+      fetchAll(db.from('historico_recente').select('uc,ocorrencia,dt_inicio,dt_fim,equipe,causa,procedente').eq('finalizado', true)),
+      fetchAll(db.from('visao_atual').select('uc,ocorrencia,estado,equipe'))
     ]);
+
+    // Somente UCs com ocorrência ativa
+    const ucsAtivas = new Set(ativasRaw.map(a => a.uc));
 
     // Agrupa histórico recente por UC
     const recenteMap = {};
@@ -197,6 +201,9 @@ async function carregar() {
     _lista = [];
 
     for (const h of hist) {
+      // Pula UCs sem ocorrência ativa no momento
+      if (!ucsAtivas.has(h.uc)) continue;
+
       // Atendimentos da base histórica
       const atendHist = (h.historico || [])
         .filter(a => a.data_conc)
