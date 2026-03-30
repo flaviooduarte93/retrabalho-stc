@@ -1758,3 +1758,16 @@ body {
 @media(max-width: 620px) {
   .nav-cards--four { grid-template-columns: 1fr !important; }
 }
+
+/* ===== STAT CARD FILTRO ATIVO ===== */
+.stat-card[data-filtro] { transition: all .18s ease; }
+.stat-card[data-filtro]:hover { transform: translateY(-2px); box-shadow: var(--shadow-lg); }
+.stat-card--active {
+  outline: 3px solid var(--eq-blue);
+  outline-offset: 2px;
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-lg);
+}
+.stat-card.danger.stat-card--active  { outline-color: var(--eq-red); }
+.stat-card.warning.stat-card--active { outline-color: var(--eq-amber-dark); }
+.stat-card.success.stat-card--active { outline-color: var(--eq-green); }
