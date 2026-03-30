@@ -175,17 +175,17 @@ async function carregar() {
       return all;
     }
 
-    // Busca apenas UCs com ocorrência ATIVA no momento + histórico completo
-    const [hist, recenteRaw, ativasRaw] = await Promise.all([
-      fetchAll(db.from('historico').select('uc,qtd_atendimentos,historico,prefixo,causa')),
-      fetchAll(db.from('historico_recente').select('uc,ocorrencia,dt_inicio,dt_fim,equipe,causa,procedente').eq('finalizado', true)),
-      fetchAll(db.from('visao_atual').select('uc,ocorrencia,estado,equipe'))
+    // Busca TODAS as UCs ativas + histórico completo em paralelo
+    const [ativasRaw, hist, recenteRaw] = await Promise.all([
+      fetchAll(db.from('visao_atual').select('uc,ocorrencia,estado,equipe')),
+      fetchAll(db.from('historico').select('uc,qtd_atendimentos,historico')),
+      fetchAll(db.from('historico_recente').select('uc,ocorrencia,dt_inicio,dt_fim,equipe,causa').eq('finalizado', true))
     ]);
 
-    // Somente UCs com ocorrência ativa
-    const ucsAtivas = new Set(ativasRaw.map(a => a.uc));
+    // Mapas para lookup rápido
+    const historicoMap = {};
+    hist.forEach(h => { historicoMap[h.uc] = h; });
 
-    // Agrupa histórico recente por UC
     const recenteMap = {};
     for (const r of recenteRaw) {
       if (!recenteMap[r.uc]) recenteMap[r.uc] = [];
@@ -198,20 +198,21 @@ async function carregar() {
       });
     }
 
+    // Itera por todas as UCs únicas com ocorrência ativa
+    const ucsUnicas = [...new Set(ativasRaw.map(a => a.uc))];
     _lista = [];
 
-    for (const h of hist) {
-      // Pula UCs sem ocorrência ativa no momento
-      if (!ucsAtivas.has(h.uc)) continue;
+    for (const uc of ucsUnicas) {
+      const h = historicoMap[uc];
 
       // Atendimentos da base histórica
-      const atendHist = (h.historico || [])
+      const atendHist = (h?.historico || [])
         .filter(a => a.data_conc)
         .map(a => ({ ...a, fonte: 'historico' }));
 
-      // Atendimentos do histórico recente (não duplicar os que já estão na base)
+      // Atendimentos do histórico recente (sem duplicar)
       const osVistas = new Set(atendHist.map(a => a.os));
-      const atendRecente = (recenteMap[h.uc] || [])
+      const atendRecente = (recenteMap[uc] || [])
         .filter(a => a.data_conc && !osVistas.has(a.os))
         .map(a => ({ ...a, fonte: 'recente' }));
 
@@ -219,9 +220,9 @@ async function carregar() {
       const atends = [...atendHist, ...atendRecente]
         .sort((a, b) => (a.data_origem||'') > (b.data_origem||'') ? 1 : -1);
 
-      if (atends.length < 1) continue;
+      if (atends.length < 1) continue; // sem histórico finalizado
 
-      // Verifica se o ÚLTIMO atendimento (de qualquer base) é improcedente
+      // Verifica se o ÚLTIMO atendimento finalizado é improcedente
       const ultimoFinalizado = atends[atends.length - 1];
       if (_cbIsProcedente(ultimoFinalizado.causa)) continue;
 
@@ -233,8 +234,8 @@ async function carregar() {
       }
 
       _lista.push({
-        uc:              h.uc,
-        qtdAtendimentos: Math.max(h.qtd_atendimentos || 0, atends.length),
+        uc,
+        qtdAtendimentos: Math.max(h?.qtd_atendimentos || 0, atends.length),
         qtdImprocedentes,
         ultimoAtend:     ultimoFinalizado,
         historico:       atends,
