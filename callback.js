@@ -1,14 +1,14 @@
 // js/callback.js — Sugestão de Call-Back
 
-// Classificação de procedência local (robusta)
 function _cbNorm(s) {
   return String(s||'').toUpperCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/[^A-Z0-9]+/g,' ').trim().replace(/\s+/g,' ');
 }
+
 function _cbIsProcedente(causa) {
   const c = _cbNorm(causa);
-  if (!c || c === '----' || c === '') return null; // indefinido — não classifica
+  if (!c || c === '----') return null; // sem causa — não classifica
   const IMP = [
     "ACESSO IMPEDIDO","DISJUNTOR BT CLIENTE DESARMADO","DISJUNTOR BT CLIENTE COM DEFEITO",
     "DISJUNTOR MT GRUPO A DESARMADO","ENCONTRADO ENERGIA CORTADA CLIENTE",
@@ -28,7 +28,6 @@ function _cbIsProcedente(causa) {
   return true;
 }
 
-// Chave de deduplicação: mês/ano + número final da OS (igual ao upload.js)
 function _cbChaveOS(osStr, dataStr) {
   const num = String(osStr||'').trim().replace(/^\d{4}-\d+-/, '');
   if (!dataStr) return String(osStr||'').trim();
@@ -54,16 +53,13 @@ let _lista = [], _criterio = 'recente', _filtro = '';
 
 function filtrarUC(v) {
   _filtro = v;
-  const c = document.getElementById('filtro-clear');
-  if (c) c.style.display = v ? 'flex' : 'none';
+  document.getElementById('filtro-clear').style.display = v ? 'flex' : 'none';
   renderLista();
 }
 function limparFiltro() {
   _filtro = '';
-  const i = document.getElementById('filtro-uc');
-  if (i) i.value = '';
-  const c = document.getElementById('filtro-clear');
-  if (c) c.style.display = 'none';
+  const i = document.getElementById('filtro-uc'); if (i) i.value = '';
+  document.getElementById('filtro-clear').style.display = 'none';
   renderLista();
 }
 function ordenar(criterio) {
@@ -85,7 +81,9 @@ function renderLista() {
 
   const el = document.getElementById('callback-container');
   if (!lista.length) {
-    el.innerHTML = `<div class="no-results" style="padding:48px 0"><p>Nenhuma UC com último atendimento improcedente e ocorrência ativa.</p></div>`;
+    el.innerHTML = `<div class="no-results" style="padding:48px 0">
+      <p>Nenhuma UC encontrada com último atendimento improcedente e ocorrência ativa.</p>
+    </div>`;
     return;
   }
 
@@ -94,7 +92,7 @@ function renderLista() {
     const urgencia = dias !== null && dias <= 7 ? 'urgente' : dias !== null && dias <= 30 ? 'recente' : 'normal';
     const atendRows = h.historico.map((at,i) => {
       const proc = _cbIsProcedente(at.causa);
-      const imp = proc === false;
+      const imp  = proc === false;
       return `<tr class="${imp?'row-improcedente':''}">
         <td><span class="atend-num-badge" style="background:${imp?'var(--eq-gray-400)':'var(--eq-blue)'}">${i+1}</span></td>
         <td><strong>${at.os||'----'}</strong></td>
@@ -102,7 +100,7 @@ function renderLista() {
         <td>${fmtDate(at.data_conc)}</td>
         <td>${at.prefixo||'----'}</td>
         <td>${at.causa||'----'}</td>
-        <td>${imp?'<span class="badge-improcedente" style="font-size:.68rem">✗ Improcedente</span>':proc===true?'<span class="badge-procedente" style="font-size:.68rem">✓ Procedente</span>':'<span style="font-size:.68rem;color:var(--eq-gray-400)">— Sem causa</span>'}</td>
+        <td>${imp?'<span class="badge-improcedente" style="font-size:.68rem">✗ Improcedente</span>':proc===true?'<span class="badge-procedente" style="font-size:.68rem">✓ Procedente</span>':'<span style="font-size:.68rem;color:var(--eq-gray-400)">— Ativa</span>'}</td>
       </tr>`;
     }).join('');
 
@@ -115,7 +113,7 @@ function renderLista() {
           </div>
           <div class="callback-meta">
             ${h.qtdAtendimentos} atend. total ·
-            último improcedente${h.qtdImprocedentes > 1 ? ` · ${h.qtdImprocedentes} consecutivos` : ''}
+            último atend. finalizado improcedente${h.qtdImprocedentes > 1 ? ` · ${h.qtdImprocedentes} consecutivos` : ''}
           </div>
         </div>
         <div class="callback-header-right">
@@ -136,9 +134,9 @@ function renderLista() {
       </div>
       <div class="callback-body">
         <div class="callback-causas">
-          ${h.historico.slice(-3).reverse().map(at => {
+          ${h.historico.filter(a => a.data_conc).slice(-3).reverse().map(at => {
             const proc = _cbIsProcedente(at.causa);
-            const imp = proc === false;
+            const imp  = proc === false;
             return `<span class="callback-causa-chip ${imp?'chip-imp':proc===true?'chip-proc':''}">
               ${imp?'✗':proc===true?'✓':'—'} ${(at.causa||'----').substring(0,40)}${(at.causa||'').length>40?'…':''}
               <span style="opacity:.6;font-size:.65rem;margin-left:4px">${fmtDateShort(at.data_conc||at.data_origem)}</span>
@@ -176,74 +174,92 @@ async function carregar() {
     }
 
     // Busca tudo em paralelo
+    // historico_recente: pega TODOS (finalizados e ativos) para ter o histórico completo
     const [ativasRaw, hist, recenteRaw] = await Promise.all([
-      fetchAll(db.from('visao_atual').select('uc')),
+      fetchAll(db.from('visao_atual').select('uc,ocorrencia,estado')),
       fetchAll(db.from('historico').select('uc,qtd_atendimentos,historico')),
-      fetchAll(db.from('historico_recente').select('uc,ocorrencia,dt_inicio,dt_fim,equipe,causa').eq('finalizado',true))
+      fetchAll(db.from('historico_recente').select('uc,ocorrencia,dt_inicio,dt_fim,equipe,causa,finalizado,procedente'))
     ]);
 
-    // Mapas para lookup
+    // Mapa histórico por UC
     const historicoMap = {};
     hist.forEach(h => { historicoMap[h.uc] = h; });
 
+    // Mapa recente por UC — inclui finalizados E ativos para ter contexto completo
     const recenteMap = {};
     for (const r of recenteRaw) {
       if (!recenteMap[r.uc]) recenteMap[r.uc] = [];
       recenteMap[r.uc].push({
         os:          r.ocorrencia,
         data_origem: r.dt_inicio,
-        data_conc:   r.dt_fim,
-        prefixo:     r.equipe||'----',
-        causa:       r.causa||'',
+        data_conc:   r.dt_fim    || null,  // null = ainda ativo
+        prefixo:     r.equipe    || '----',
+        causa:       r.causa     || '',
+        finalizado:  r.finalizado,
       });
     }
 
+    // UCs únicas ativas
     const ucsUnicas = [...new Set(ativasRaw.map(a => a.uc))];
     _lista = [];
+
+    let debug = { semHistorico: 0, semFinalizados: 0, ultimoProcedente: 0, semCausa: 0, adicionados: 0 };
 
     for (const uc of ucsUnicas) {
       const h = historicoMap[uc];
 
-      // Histórico base
+      // Atendimentos da base histórica (sempre finalizados)
       const atendHist = (h?.historico||[])
         .filter(a => a.data_conc)
-        .map(a => ({...a}));
+        .map(a => ({...a, finalizado: true}));
 
-      // Histórico recente — deduplicado por chave mês/OS
+      // Atendimentos do histórico recente — deduplicados
       const chavesVistas = new Set(atendHist.map(a => _cbChaveOS(a.os, a.data_origem)));
       const atendRecente = (recenteMap[uc]||[])
-        .filter(a => {
-          if (!a.data_conc) return false;
-          return !chavesVistas.has(_cbChaveOS(a.os, a.data_origem));
-        });
+        .filter(a => !chavesVistas.has(_cbChaveOS(a.os, a.data_origem)));
 
-      const atends = [...atendHist, ...atendRecente]
+      // Une tudo e ordena cronologicamente
+      const todos = [...atendHist, ...atendRecente]
         .sort((a,b) => (a.data_origem||'').localeCompare(b.data_origem||''));
 
-      if (!atends.length) continue;
+      if (!todos.length) { debug.semHistorico++; continue; }
 
-      // Último atendimento finalizado
-      const ultimo = atends[atends.length - 1];
-      const procUltimo = _cbIsProcedente(ultimo.causa);
+      // Pega apenas os FINALIZADOS para determinar o último atendimento concluído
+      const finalizados = todos.filter(a => a.data_conc);
+      if (!finalizados.length) { debug.semFinalizados++; continue; }
 
-      // Só entra se o último for claramente improcedente (não null/indefinido)
-      if (procUltimo !== false) continue;
+      const ultimoFinalizado = finalizados[finalizados.length - 1];
+      const proc = _cbIsProcedente(ultimoFinalizado.causa);
 
-      // Conta consecutivos improcedentes no final
+      if (proc === null) { debug.semCausa++; continue; }  // sem causa definida
+      if (proc === true) { debug.ultimoProcedente++; continue; }  // último foi procedente
+
+      // Chegou aqui: último atendimento finalizado foi IMPROCEDENTE → callback!
       let qtdImp = 0;
-      for (let i = atends.length-1; i >= 0; i--) {
-        if (_cbIsProcedente(atends[i].causa) === false) qtdImp++;
+      for (let i = finalizados.length-1; i >= 0; i--) {
+        if (_cbIsProcedente(finalizados[i].causa) === false) qtdImp++;
         else break;
       }
 
+      debug.adicionados++;
       _lista.push({
         uc,
-        qtdAtendimentos: Math.max(h?.qtd_atendimentos||0, atends.length),
+        qtdAtendimentos: Math.max(h?.qtd_atendimentos||0, todos.length),
         qtdImprocedentes: qtdImp,
-        ultimoAtend: ultimo,
-        historico: atends,
+        ultimoAtend: ultimoFinalizado,
+        historico: todos,  // exibe todos (finalizados + ativo atual)
       });
     }
+
+    // Log de diagnóstico no console do navegador
+    console.log('📊 Callback diagnóstico:', {
+      ucsAtivas:        ucsUnicas.length,
+      semHistorico:     debug.semHistorico,
+      semFinalizados:   debug.semFinalizados,
+      ultimoProcedente: debug.ultimoProcedente,
+      semCausa:         debug.semCausa,
+      sugeridos:        debug.adicionados,
+    });
 
     // Stats
     const urgentes = _lista.filter(h => { const d=diasDesde(h.ultimoAtend?.data_conc); return d!==null&&d<=7; }).length;
