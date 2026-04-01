@@ -47,6 +47,11 @@ async function upsertBatch(table, rows, chunkSize = 800) {
   }
 }
 
+function diasRestantesSnap(dc) {
+  if (!dc) return null;
+  return Math.ceil((new Date(new Date(dc).getTime() + 91*86400000) - new Date()) / 86400000);
+}
+
 // ============================================================
 // BASE HISTÓRICA
 // ============================================================
@@ -153,7 +158,8 @@ async function processHistorico(file) {
 
   setStatus('status-historico', `⏳ Salvando ${docs.length} UCs...`, 'loading');
   await upsertBatch('historico', docs);
-  // Salva meta da base histórica (timestamp de atualização)
+
+  // Salva meta da base histórica
   await db.from('historico_meta')
     .upsert({
       id: 'principal',
@@ -161,6 +167,21 @@ async function processHistorico(file) {
       total_ucs: docs.length,
       arquivo: file.name
     }, { onConflict: 'id', ignoreDuplicates: false });
+
+  // Snapshot diário para acompanhamento do indicador
+  function _diasR(dc) {
+    if (!dc) return null;
+    return Math.ceil((new Date(new Date(dc).getTime()+91*86400000) - new Date()) / 86400000);
+  }
+  const dataHoje = new Date().toISOString().slice(0,10);
+  const snapCritico = docs.filter(d => { const r=_diasR(d.data_conc); return r!==null&&r<=10; }).length;
+  const snapAlerta  = docs.filter(d => { const r=_diasR(d.data_conc); return r!==null&&r>10&&r<=30; }).length;
+  const snapOk      = docs.filter(d => { const r=_diasR(d.data_conc); return r!==null&&r>30; }).length;
+  await db.from('historico_snapshots').delete().eq('data', dataHoje);
+  await db.from('historico_snapshots').insert({
+    data: dataHoje, total_ucs: docs.length,
+    critico: snapCritico, alerta: snapAlerta, ok: snapOk
+  });
 
   setStatus('status-historico', `✅ ${docs.length} UCs salvas!`, 'success');
 }
