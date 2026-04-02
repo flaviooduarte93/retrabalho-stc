@@ -50,9 +50,9 @@
         <div class="gantt-title">Total de UCs no Balde de Retrabalho</div>
         <div style="display:flex;gap:12px;font-size:.75rem;align-items:center">
           <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#1565C0;display:inline-block;border-radius:2px"></span>Total</span>
-          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#C62828;display:inline-block;border-radius:2px"></span>Crítico (&lt;10d)</span>
-          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#F9A825;display:inline-block;border-radius:2px"></span>Alerta (10-30d)</span>
-          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#2E7D32;display:inline-block;border-radius:2px"></span>OK (&gt;30d)</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#2E7D32;display:inline-block;border-radius:2px"></span>&lt;10d (saindo)</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#F9A825;display:inline-block;border-radius:2px"></span>10-30d</span>
+          <span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:3px;background:#C62828;display:inline-block;border-radius:2px"></span>&gt;30d (longe)</span>
         </div>
       </div>
       <div style="position:relative;height:320px">
@@ -80,9 +80,9 @@
             <tr>
               <th>Data</th>
               <th>Total UCs</th>
-              <th style="color:var(--eq-red)">Crítico (&lt;10d)</th>
-              <th style="color:var(--eq-amber-dark)">Alerta (10-30d)</th>
-              <th style="color:var(--eq-green)">OK (&gt;30d)</th>
+              <th style="color:var(--eq-green)">&lt;10d (saindo)</th>
+              <th style="color:var(--eq-amber-dark)">10-30d</th>
+              <th style="color:var(--eq-red)">&gt;30d (longe)</th>
               <th>Var. Total</th>
             </tr>
           </thead>
