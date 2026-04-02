@@ -46,9 +46,9 @@ function renderStats(dados) {
         <div class="stat-label">UCs hoje</div>
         <div style="font-size:.72rem;font-weight:700;color:${varCor};margin-top:4px">${varSinal} vs ontem</div>
       </div>
-      <div class="stat-card danger">
+      <div class="stat-card success">
         <div class="stat-value">${ultimo.critico}</div>
-        <div class="stat-label">🔴 Crítico hoje</div>
+        <div class="stat-label">🟢 Saindo em breve</div>
         <div style="font-size:.72rem;color:var(--eq-gray-500);margin-top:4px">saem em &lt;10 dias</div>
       </div>
       <div class="stat-card success">
@@ -82,9 +82,9 @@ function renderGraficos(dados) {
       labels,
       datasets: [
         { label:'Total', data:total,   borderColor:'#1565C0', backgroundColor:'rgba(21,101,192,.08)', fill:true, tension:.3, pointRadius:dados.length<=30?4:2, borderWidth:2 },
-        { label:'Crítico', data:critico, borderColor:'#C62828', backgroundColor:'transparent', tension:.3, pointRadius:dados.length<=30?3:1, borderWidth:1.5, borderDash:[4,3] },
-        { label:'Alerta',  data:alerta,  borderColor:'#F9A825', backgroundColor:'transparent', tension:.3, pointRadius:dados.length<=30?3:1, borderWidth:1.5, borderDash:[4,3] },
-        { label:'OK',      data:ok,      borderColor:'#2E7D32', backgroundColor:'transparent', tension:.3, pointRadius:dados.length<=30?3:1, borderWidth:1.5, borderDash:[4,3] },
+        { label:'<10d (saindo)', data:critico, borderColor:'#2E7D32', backgroundColor:'transparent', tension:.3, pointRadius:dados.length<=30?3:1, borderWidth:1.5, borderDash:[4,3] },
+        { label:'10-30d',        data:alerta,  borderColor:'#F9A825', backgroundColor:'transparent', tension:.3, pointRadius:dados.length<=30?3:1, borderWidth:1.5, borderDash:[4,3] },
+        { label:'>30d (longe)',  data:ok,      borderColor:'#C62828', backgroundColor:'transparent', tension:.3, pointRadius:dados.length<=30?3:1, borderWidth:1.5, borderDash:[4,3] },
       ]
     },
     options: {
@@ -109,9 +109,9 @@ function renderGraficos(dados) {
     data: {
       labels,
       datasets: [
-        { label:'Crítico (<10d)',  data:critico, backgroundColor:'rgba(198,40,40,.85)',   stack:'s' },
-        { label:'Alerta (10-30d)', data:alerta,  backgroundColor:'rgba(249,168,37,.85)',  stack:'s' },
-        { label:'OK (>30d)',       data:ok,       backgroundColor:'rgba(46,125,50,.75)',   stack:'s' },
+        { label:'<10d (saindo)', data:critico, backgroundColor:'rgba(46,125,50,.85)',   stack:'s' },
+        { label:'10-30d',        data:alerta,  backgroundColor:'rgba(249,168,37,.85)',  stack:'s' },
+        { label:'>30d (longe)',  data:ok,      backgroundColor:'rgba(198,40,40,.80)',   stack:'s' },
       ]
     },
     options: {
@@ -139,9 +139,9 @@ function renderTabela(dados) {
     return `<tr>
       <td><strong>${fmtDataBR(d.data)}</strong></td>
       <td><strong>${d.total_ucs}</strong></td>
-      <td style="color:var(--eq-red);font-weight:600">${d.critico}</td>
+      <td style="color:var(--eq-green);font-weight:600">${d.critico}</td>
       <td style="color:var(--eq-amber-dark);font-weight:600">${d.alerta}</td>
-      <td style="color:var(--eq-green);font-weight:600">${d.ok}</td>
+      <td style="color:var(--eq-red);font-weight:600">${d.ok}</td>
       <td>${varStr}</td>
     </tr>`;
   }).join('');
