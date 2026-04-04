@@ -168,18 +168,21 @@ async function processHistorico(file) {
       arquivo: file.name
     }, { onConflict: 'id', ignoreDuplicates: false });
 
-  // Snapshot diário para acompanhamento do indicador
+  // Snapshot diário — conta apenas UCs DENTRO da janela de 90 dias
   function _diasR(dc) {
     if (!dc) return null;
     return Math.ceil((new Date(new Date(dc).getTime()+91*86400000) - new Date()) / 86400000);
   }
-  const dataHoje = new Date().toISOString().slice(0,10);
-  const snapCritico = docs.filter(d => { const r=_diasR(d.data_conc); return r!==null&&r<=10; }).length;
+  const _agora    = new Date();
+  const _brasilia = new Date(_agora.getTime() - 3*60*60*1000);
+  const dataHoje  = _brasilia.toISOString().slice(0,10);
+  const snapCritico = docs.filter(d => { const r=_diasR(d.data_conc); return r!==null&&r>0&&r<=10; }).length;
   const snapAlerta  = docs.filter(d => { const r=_diasR(d.data_conc); return r!==null&&r>10&&r<=30; }).length;
   const snapOk      = docs.filter(d => { const r=_diasR(d.data_conc); return r!==null&&r>30; }).length;
+  const snapTotal   = snapCritico + snapAlerta + snapOk;
   await db.from('historico_snapshots').delete().eq('data', dataHoje);
   await db.from('historico_snapshots').insert({
-    data: dataHoje, total_ucs: docs.length,
+    data: dataHoje, total_ucs: snapTotal,
     critico: snapCritico, alerta: snapAlerta, ok: snapOk
   });
 
