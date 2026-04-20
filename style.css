@@ -1788,3 +1788,39 @@ body {
 @media(min-width: 1200px) {
   .nav-cards--four { grid-template-columns: repeat(3, 1fr) !important; }
 }
+
+/* ===== BARRA DE PROGRESSO DO UPLOAD ===== */
+.upload-progress-bar-outer {
+  width: 100%;
+  height: 6px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 99px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.upload-progress-bar-inner {
+  height: 100%;
+  background: var(--eq-blue-light);
+  border-radius: 99px;
+  transition: width 0.3s ease;
+}
+.upload-progress-pct {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--eq-blue-light);
+  text-align: right;
+  margin-top: 2px;
+}
+
+/* Barra indeterminada (quando não há % definido) */
+.upload-progress-bar-indeterminate {
+  height: 100%;
+  width: 40%;
+  background: var(--eq-blue-light);
+  border-radius: 99px;
+  animation: progress-slide 1.2s ease-in-out infinite;
+}
+@keyframes progress-slide {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
+}
