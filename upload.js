@@ -32,18 +32,36 @@ function limparTexto(s) {
     .replace(/\?I/gi,'Í').replace(/\?U/gi,'Ú').replace(/\?/g,'Ã').trim();
 }
 
-function setStatus(elId, msg, type) {
+function setStatus(elId, msg, type, pct = null) {
   const el = document.getElementById(elId);
   if (!el) return;
-  el.textContent = msg;
+  const progressId = elId + '-progress';
+  let progressHtml = '';
+  if (type === 'loading' && pct !== null) {
+    progressHtml = `
+      <div class="upload-progress-bar-outer">
+        <div class="upload-progress-bar-inner" style="width:${pct}%"></div>
+      </div>
+      <div class="upload-progress-pct">${pct}%</div>`;
+  } else if (type === 'loading') {
+    progressHtml = `
+      <div class="upload-progress-bar-outer">
+        <div class="upload-progress-bar-indeterminate"></div>
+      </div>`;
+  }
+  el.innerHTML = `<span>${msg}</span>${progressHtml}`;
   el.className = 'upload-status ' + (type||'');
 }
 
-// Upsert em lotes (Supabase aceita ~1000 por request)
-async function upsertBatch(table, rows, chunkSize = 800) {
+// Upsert em lotes com progresso visual
+async function upsertBatch(table, rows, chunkSize = 200, statusEl = null) {
   for (let i = 0; i < rows.length; i += chunkSize) {
     const { error } = await db.from(table).upsert(rows.slice(i, i + chunkSize));
     if (error) throw new Error(`Erro ao salvar em ${table}: ${error.message}`);
+    if (statusEl) {
+      const pct = Math.round(((i + chunkSize) / rows.length) * 100);
+      setStatus(statusEl, `⏳ Salvando ${Math.min(i + chunkSize, rows.length)}/${rows.length} registros...`, 'loading', Math.min(pct, 100));
+    }
   }
 }
 
@@ -157,7 +175,7 @@ async function processHistorico(file) {
   if (delErr) throw new Error(delErr.message);
 
   setStatus('status-historico', `⏳ Salvando ${docs.length} UCs...`, 'loading');
-  await upsertBatch('historico', docs);
+  await upsertBatch('historico', docs, 200, 'status-historico');
 
   // Salva meta da base histórica
   await db.from('historico_meta')
@@ -281,7 +299,7 @@ async function processAtual(file) {
 
   // Apaga tudo e reinsere — simples e rápido no Supabase
   await db.from('visao_atual').delete().neq('ocorrencia','__never__');
-  await upsertBatch('visao_atual', docs);
+  await upsertBatch('visao_atual', docs, 200, 'status-atual');
 
   // Salva meta das ocorrências ativas com timestamp
   await db.from('historico_recente_meta')
