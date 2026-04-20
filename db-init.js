@@ -222,7 +222,9 @@ const db = (() => {
 
   // Interface pública — imita o Supabase client
   return {
+    // Expõe sql para debug no console
     sql,
+    query: sql,
 
     from(table) {
       return {
