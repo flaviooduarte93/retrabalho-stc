@@ -125,22 +125,18 @@ async function carregarStatusBases() {
     }
 
     // 3. Base histórica
-    const { data: snapHistCheck } = await db.from('historico').select('uc').limit(1);
-    if (snapHistCheck?.length) {
-      const { count: histCount } = await db.from('historico').select('*', { count: 'exact', head: true });
-      // Supabase não tem timestamp de atualização nativo, usamos um doc de meta
-      const { data: histMeta } = await db.from('historico_meta').select('atualizado_em').limit(1);
-      const histTs = histMeta?.[0]?.atualizado_em || null;
-
+    const { data: histMeta } = await db.from('historico_meta').select('*').limit(1);
+    if (histMeta?.length) {
+      const h = histMeta[0];
       chips.push(`
         <div class="base-chip chip-historico">
           <span class="chip-dot"></span>
           <div class="chip-info">
             <div class="chip-top">
               <span class="chip-label">Base Histórica</span>
-              <span class="chip-count">${histCount||0} UCs</span>
+              <span class="chip-count">${h.total_ucs||0} UCs</span>
             </div>
-            ${histTs ? `<div class="chip-updated">⏱ ${fmtDateTime(histTs)}</div>` : ''}
+            ${h.atualizado_em ? `<div class="chip-updated">⏱ ${fmtDateTime(h.atualizado_em)}</div>` : ''}
           </div>
         </div>`);
     }
