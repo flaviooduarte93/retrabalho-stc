@@ -3,10 +3,23 @@
 function mesAnoKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
 }
-function setStatusRecente(msg, type) {
+function setStatusRecente(msg, type, pct = null) {
   const el = document.getElementById('status-recente');
   if (!el) return;
-  el.textContent = msg;
+  let progressHtml = '';
+  if (type === 'loading' && pct !== null) {
+    progressHtml = `
+      <div class="upload-progress-bar-outer">
+        <div class="upload-progress-bar-inner" style="width:${pct}%"></div>
+      </div>
+      <div class="upload-progress-pct">${pct}%</div>`;
+  } else if (type === 'loading') {
+    progressHtml = `
+      <div class="upload-progress-bar-outer">
+        <div class="upload-progress-bar-indeterminate"></div>
+      </div>`;
+  }
+  el.innerHTML = `<span>${msg}</span>${progressHtml}`;
   el.className = 'upload-status '+(type||'');
 }
 const ESTADOS_ATIVOS = ['PREPARAÇÃO','TRABALHANDO','DESLOCAMENTO','MULTIPLA'];
@@ -96,10 +109,12 @@ async function processarPlanilhaRecente(file, idx, total) {
     });
   }
 
-  // Upsert em lotes de 800
-  for (let i = 0; i < docs.length; i += 800) {
-    const { error } = await db.from('historico_recente').upsert(docs.slice(i, i+800));
+  // Upsert em lotes com progresso visual
+  for (let i = 0; i < docs.length; i += 200) {
+    const { error } = await db.from('historico_recente').upsert(docs.slice(i, i+200));
     if (error) throw new Error(error.message);
+    const pct = Math.round(((i + 200) / docs.length) * 100);
+    setStatusRecente(`⏳ Salvando ${Math.min(i+200, docs.length)}/${docs.length} registros de ${mesAno}...`, 'loading', Math.min(pct,100));
   }
 
   // Meta
