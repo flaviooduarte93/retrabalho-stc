@@ -132,6 +132,12 @@ const db = (() => {
       const { data } = await this.get();
       return { data: data[0] || null, error: null };
     }
+
+    // Torna a Query auto-executável (como o Supabase)
+    // Permite: await db.from('table').select('*') sem .get()
+    then(resolve, reject) {
+      return this.get().then(resolve, reject);
+    }
   }
 
   // Serializa/desserializa campos JSON (historico JSONB → TEXT)
