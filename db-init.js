@@ -162,27 +162,49 @@ const db = (() => {
     return r;
   }
 
-  // Upsert em lotes
-  async function upsertRows(table, rows) {
+  // Converte ? para :paramN e monta named_args
+  function buildStmt(query, args) {
+    let q = query;
+    const named = args.map((v, i) => {
+      q = q.replace('?', `:param${i}`);
+      return { name: `param${i}`, value: toTursoValue(v) };
+    });
+    return { sql: q, named_args: named };
+  }
+
+  // Upsert em lotes — envia N rows por requisição HTTP (pipeline)
+  async function upsertRows(table, rows, chunkSize = 200) {
     if (!rows.length) return { error: null };
     const first = serializeRow(rows[0]);
     const cols  = Object.keys(first);
     const placeholders = cols.map(() => '?').join(', ');
     const query = `INSERT OR REPLACE INTO ${table} (${cols.join(', ')}) VALUES (${placeholders})`;
-    for (const row of rows) {
-      const r = serializeRow(row);
-      await sql(query, cols.map(c => r[c] ?? null));
+
+    for (let i = 0; i < rows.length; i += chunkSize) {
+      const chunk = rows.slice(i, i + chunkSize);
+      const requests = chunk.map(row => {
+        const r    = serializeRow(row);
+        const args = cols.map(c => r[c] ?? null);
+        return { type: 'execute', stmt: buildStmt(query, args) };
+      });
+      requests.push({ type: 'close' });
+
+      const res = await fetch(`${TURSO_URL}/v2/pipeline`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${TURSO_TOKEN}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ requests })
+      });
+      if (!res.ok) throw new Error(`Turso batch HTTP ${res.status}`);
+      const json = await res.json();
+      const erros = (json.results || []).filter(r => r.type === 'error');
+      if (erros.length) throw new Error(`Turso batch erro: ${erros[0].error?.message}`);
     }
     return { error: null };
   }
 
-  // Insert único
+  // Insert único (usa upsertRows com 1 row)
   async function insertRow(table, row) {
-    const r    = serializeRow(row);
-    const cols = Object.keys(r);
-    const query = `INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(()=>'?').join(', ')})`;
-    await sql(query, cols.map(c => r[c] ?? null));
-    return { error: null };
+    return upsertRows(table, [row], 1);
   }
 
   // Delete
