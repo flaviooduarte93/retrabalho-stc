@@ -9,23 +9,35 @@ const TURSO_TOKEN = 'eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOj
 // ============================================================
 const db = (() => {
 
+  async function fetchWithRetry(url, opts, tentativas = 3) {
+    for (let t = 1; t <= tentativas; t++) {
+      try {
+        const res = await fetch(url, opts);
+        return res;
+      } catch(err) {
+        if (t === tentativas) throw err;
+        // Aguarda antes de tentar novamente (1s, 2s, 3s...)
+        await new Promise(r => setTimeout(r, t * 1000));
+      }
+    }
+  }
+
   async function sql(query, args = []) {
     // Converte ? para :param0, :param1, etc.
     let q = query;
     args.forEach((_, i) => { q = q.replace('?', `:param${i}`); });
 
-    const res = await fetch(`${TURSO_URL}/v2/pipeline`, {
+    const body = JSON.stringify({
+      requests: [
+        { type: 'execute', stmt: { sql: q, named_args: args.map((v,i) => ({ name: `param${i}`, value: toTursoValue(v) })) } },
+        { type: 'close' }
+      ]
+    });
+
+    const res = await fetchWithRetry(`${TURSO_URL}/v2/pipeline`, {
       method:  'POST',
-      headers: {
-        'Authorization': `Bearer ${TURSO_TOKEN}`,
-        'Content-Type':  'application/json',
-      },
-      body: JSON.stringify({
-        requests: [
-          { type: 'execute', stmt: { sql: q, named_args: args.map((v,i) => ({ name: `param${i}`, value: toTursoValue(v) })) } },
-          { type: 'close' }
-        ]
-      })
+      headers: { 'Authorization': `Bearer ${TURSO_TOKEN}`, 'Content-Type': 'application/json' },
+      body,
     });
 
     if (!res.ok) throw new Error(`Turso HTTP ${res.status}: ${await res.text()}`);
@@ -195,7 +207,7 @@ const db = (() => {
       });
       requests.push({ type: 'close' });
 
-      const res = await fetch(`${TURSO_URL}/v2/pipeline`, {
+      const res = await fetchWithRetry(`${TURSO_URL}/v2/pipeline`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${TURSO_TOKEN}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ requests })
