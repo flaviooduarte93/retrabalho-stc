@@ -144,6 +144,7 @@ async function processarArquivosRecentes(files) {
     const resumo = resultados.map(r=>`${r.mesAno} (${r.total} reg.)`).join(', ');
     releaseWakeLock();
     setStatusRecente(`✅ Concluído! ${resumo}`, 'success');
+    if (window.atualizarStatusBases) window.atualizarStatusBases();
   } catch(err) {
     console.error(err);
     setStatusRecente(`❌ Erro: ${err.message}`, 'error');
