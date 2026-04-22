@@ -155,12 +155,9 @@ async function carregarStatusBases() {
 // Atualiza status ao carregar e após cada upload
 document.addEventListener('DOMContentLoaded', () => {
   carregarStatusBases();
-
-  // Recarrega status após upload bem-sucedido
-  ['file-historico','file-atual','file-recente'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.addEventListener('change', () => {
-      setTimeout(carregarStatusBases, 3000); // aguarda o upload processar
-    });
-  });
 });
+
+// Função global chamada pelo upload.js e upload-recente.js ao concluir
+window.atualizarStatusBases = function() {
+  setTimeout(carregarStatusBases, 500);
+};
