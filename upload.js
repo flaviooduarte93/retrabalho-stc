@@ -53,6 +53,19 @@ function setStatus(elId, msg, type, pct = null) {
   el.className = 'upload-status ' + (type||'');
 }
 
+// Mantém a aba ativa durante uploads (evita ERR_NETWORK_IO_SUSPENDED)
+let _wakeLock = null;
+async function requestWakeLock() {
+  try {
+    if ('wakeLock' in navigator) {
+      _wakeLock = await navigator.wakeLock.request('screen');
+    }
+  } catch(e) { /* navegador não suporta — sem problema */ }
+}
+function releaseWakeLock() {
+  if (_wakeLock) { _wakeLock.release(); _wakeLock = null; }
+}
+
 // Upsert em lotes com progresso visual
 async function upsertBatch(table, rows, chunkSize = 200, statusEl = null) {
   for (let i = 0; i < rows.length; i += chunkSize) {
@@ -74,6 +87,7 @@ function diasRestantesSnap(dc) {
 // BASE HISTÓRICA
 // ============================================================
 async function processHistorico(file) {
+  await requestWakeLock();
   setStatus('status-historico', '⏳ Lendo arquivo...', 'loading');
   const data = await file.arrayBuffer();
   const wb = XLSX.read(data);
@@ -204,6 +218,7 @@ async function processHistorico(file) {
     critico: snapCritico, alerta: snapAlerta, ok: snapOk
   });
 
+  releaseWakeLock();
   setStatus('status-historico', `✅ ${docs.length} UCs salvas!`, 'success');
 }
 
@@ -211,6 +226,7 @@ async function processHistorico(file) {
 // OCORRÊNCIAS ATIVAS (Visão Atual)
 // ============================================================
 async function processAtual(file) {
+  await requestWakeLock();
   setStatus('status-atual', '⏳ Lendo arquivo...', 'loading');
   const data = await file.arrayBuffer();
   const wb   = XLSX.read(data);
@@ -310,6 +326,7 @@ async function processAtual(file) {
       atualizado_em: new Date().toISOString()
     }, { onConflict: 'mes_ano', ignoreDuplicates: false });
 
+  releaseWakeLock();
   setStatus('status-atual', `✅ ${docs.length} ocorrências ativas salvas!`, 'success');
 }
 
