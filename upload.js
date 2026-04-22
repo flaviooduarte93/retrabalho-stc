@@ -67,7 +67,7 @@ function releaseWakeLock() {
 }
 
 // Upsert em lotes com progresso visual
-async function upsertBatch(table, rows, chunkSize = 200, statusEl = null) {
+async function upsertBatch(table, rows, chunkSize = 800, statusEl = null) {
   for (let i = 0; i < rows.length; i += chunkSize) {
     const { error } = await db.from(table).upsert(rows.slice(i, i + chunkSize));
     if (error) throw new Error(`Erro ao salvar em ${table}: ${error.message}`);
