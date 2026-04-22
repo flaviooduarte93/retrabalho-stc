@@ -110,8 +110,8 @@ async function processarPlanilhaRecente(file, idx, total) {
   }
 
   // Upsert em lotes com progresso visual
-  for (let i = 0; i < docs.length; i += 200) {
-    const { error } = await db.from('historico_recente').upsert(docs.slice(i, i+200));
+  for (let i = 0; i < docs.length; i += 800) {
+    const { error } = await db.from('historico_recente').upsert(docs.slice(i, i+800));
     if (error) throw new Error(error.message);
     const pct = Math.round(((i + 200) / docs.length) * 100);
     setStatusRecente(`⏳ Salvando ${Math.min(i+200, docs.length)}/${docs.length} registros de ${mesAno}...`, 'loading', Math.min(pct,100));
