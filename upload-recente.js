@@ -130,6 +130,7 @@ async function processarPlanilhaRecente(file, idx, total) {
 }
 
 async function processarArquivosRecentes(files) {
+  await requestWakeLock();
   setStatusRecente('⏳ Iniciando...', 'loading');
   try {
     setStatusRecente('⏳ Verificando janela de meses...', 'loading');
@@ -141,6 +142,7 @@ async function processarArquivosRecentes(files) {
       resultados.push(r);
     }
     const resumo = resultados.map(r=>`${r.mesAno} (${r.total} reg.)`).join(', ');
+    releaseWakeLock();
     setStatusRecente(`✅ Concluído! ${resumo}`, 'success');
   } catch(err) {
     console.error(err);
