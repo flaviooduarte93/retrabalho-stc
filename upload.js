@@ -220,6 +220,7 @@ async function processHistorico(file) {
 
   releaseWakeLock();
   setStatus('status-historico', `✅ ${docs.length} UCs salvas!`, 'success');
+  if (window.atualizarStatusBases) window.atualizarStatusBases();
 }
 
 // ============================================================
@@ -328,6 +329,7 @@ async function processAtual(file) {
 
   releaseWakeLock();
   setStatus('status-atual', `✅ ${docs.length} ocorrências ativas salvas!`, 'success');
+  if (window.atualizarStatusBases) window.atualizarStatusBases();
 }
 
 // ============================================================
