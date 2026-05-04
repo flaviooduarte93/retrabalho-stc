@@ -123,10 +123,14 @@ async function carregarStatusBases() {
       }
     }
 
-    // 3. Base histórica
-    const { data: histMeta } = await db.from('historico_meta').select('*').limit(1);
-    if (histMeta?.length) {
-      const h = histMeta[0];
+    // 3. Base histórica — filtra por id='principal' para não confundir com 'visao_atual'
+    const { data: histMetaRow } = await db
+      .from('historico_meta')
+      .select('*')
+      .eq('id', 'principal')
+      .maybeSingle();
+    if (histMetaRow) {
+      const h = histMetaRow;
       chips.push(`
         <div class="base-chip chip-historico">
           <span class="chip-dot"></span>
