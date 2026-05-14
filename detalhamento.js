@@ -13,7 +13,7 @@ function fmtDateShort(iso){if(!iso)return'----';return new Date(iso).toLocaleDat
 function diasRestantes(dc){if(!dc)return null;return Math.ceil((new Date(new Date(dc).getTime()+91*86400000)-new Date())/86400000);}
 function calcPct90(dc){if(!dc)return 0;const ini=new Date(dc),fim=new Date(ini.getTime()+91*86400000),hoje=new Date();if(hoje>=fim)return 100;if(hoje<=ini)return 0;return Math.min(100,Math.round((hoje-ini)/(fim-ini)*100));}
 
-let _lista=[], _criterio='menor-tempo', _filtro='', _filtroCard='todos';
+let _lista=[], _criterio='menor-tempo', _filtro='', _filtroCard='todos', _filtroInsp='todos';
 let _inspecoesMap = {}; // uc → inspecao mais recente
 
 // ============================================================
@@ -125,6 +125,15 @@ function badgeInspecao(uc) {
 // ============================================================
 // RENDER DA LISTA
 // ============================================================
+function filtrarInsp(tipo) {
+  _filtroInsp = _filtroInsp === tipo ? 'todos' : tipo;
+  // Atualiza visual dos badges
+  document.querySelectorAll('[data-filtro-insp]').forEach(el => {
+    el.classList.toggle('insp-filtro--active', el.dataset.filtroInsp === _filtroInsp);
+  });
+  aplicarFiltroOrdem();
+}
+
 function toggleDropdown(uid){const body=document.getElementById('body_'+uid),icon=document.getElementById('icon_'+uid),item=document.getElementById('item_'+uid);if(!body)return;const open=body.style.display!=='none';body.style.display=open?'none':'block';if(icon)icon.textContent=open?'▾':'▴';if(item)item.classList.toggle('dropdown-open',!open);}
 
 function renderLista(lista){
@@ -173,6 +182,12 @@ function listaFiltrada(){
   else if(_filtroCard==='alerta') lista=lista.filter(h=>{const d=diasRestantes(h.data_conc);return d>10&&d<=30;});
   else if(_filtroCard==='ok') lista=lista.filter(h=>diasRestantes(h.data_conc)>30);
   if(_filtro.trim()) lista=lista.filter(h=>h.uc.toLowerCase().includes(_filtro.trim().toLowerCase()));
+  // Filtro por status de inspeção
+  if(_filtroInsp === 'delegadas') lista=lista.filter(h=>!!_inspecoesMap[h.uc]);
+  else if(_filtroInsp === 'ok')              lista=lista.filter(h=>_inspecoesMap[h.uc]?.status==='ok');
+  else if(_filtroInsp === 'acao_necessaria') lista=lista.filter(h=>_inspecoesMap[h.uc]?.status==='acao_necessaria');
+  else if(_filtroInsp === 'pendente')        lista=lista.filter(h=>_inspecoesMap[h.uc]?.status==='pendente');
+  else if(_filtroInsp === 'sem_inspecao')   lista=lista.filter(h=>!_inspecoesMap[h.uc]);
   if(_criterio==='maior-tempo') lista.sort((a,b)=>diasRestantes(b.data_conc)-diasRestantes(a.data_conc));
   if(_criterio==='menor-tempo') lista.sort((a,b)=>diasRestantes(a.data_conc)-diasRestantes(b.data_conc));
   if(_criterio==='mais-atend')  lista.sort((a,b)=>(b.qtd_atendimentos||1)-(a.qtd_atendimentos||1));
@@ -280,11 +295,23 @@ async function carregar(){
           <div class="stat-value">${ok}</div><div class="stat-label">Saem em mais de 30 dias</div>
         </div>
       </div>
-      <div style="font-size:.82rem;color:var(--eq-gray-500);margin-bottom:16px">
-        👁 <strong>${delegadas}</strong> UCs com inspeção delegada ·
-        ✅ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='ok'&&_lista.some(h=>h.uc===i.uc)).length}</strong> OK ·
-        ⚠ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='acao_necessaria'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Ação necessária ·
-        ⏳ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='pendente'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Pendentes
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+        <span style="font-size:.75rem;color:var(--eq-gray-400)">Filtrar por inspeção:</span>
+        <button class="insp-badge-btn" data-filtro-insp="delegadas" onclick="filtrarInsp('delegadas')">
+          👁 <strong>${delegadas}</strong> Delegadas
+        </button>
+        <button class="insp-badge-btn insp-ok" data-filtro-insp="ok" onclick="filtrarInsp('ok')">
+          ✅ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='ok'&&_lista.some(h=>h.uc===i.uc)).length}</strong> OK
+        </button>
+        <button class="insp-badge-btn insp-acao" data-filtro-insp="acao_necessaria" onclick="filtrarInsp('acao_necessaria')">
+          ⚠ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='acao_necessaria'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Ação necessária
+        </button>
+        <button class="insp-badge-btn insp-pendente" data-filtro-insp="pendente" onclick="filtrarInsp('pendente')">
+          ⏳ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='pendente'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Pendentes
+        </button>
+        <button class="insp-badge-btn insp-sem" data-filtro-insp="sem_inspecao" onclick="filtrarInsp('sem_inspecao')">
+          — <strong>${_lista.filter(h=>!_inspecoesMap[h.uc]).length}</strong> Sem inspeção
+        </button>
       </div>`;
 
     document.getElementById('det-container').innerHTML=`
