@@ -1,4 +1,12 @@
-// js/detalhamento.js — Supabase version
+// js/detalhamento.js
+
+const FISCAIS = ['Hugo Leonardo','Rogério Machado','Cainan Ataides','Francisco Pereira','Paulo Henrique'];
+const ACOES   = [
+  { value: 'troca_conector', label: 'Troca de conector' },
+  { value: 'troca_ramal',    label: 'Troca do ramal' },
+  { value: 'poda_arvore',    label: 'Poda de árvore' },
+  { value: 'outros',         label: 'Outros' },
+];
 
 function fmtDate(iso){if(!iso)return'----';return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});}
 function fmtDateShort(iso){if(!iso)return'----';return new Date(iso).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
@@ -6,7 +14,117 @@ function diasRestantes(dc){if(!dc)return null;return Math.ceil((new Date(new Dat
 function calcPct90(dc){if(!dc)return 0;const ini=new Date(dc),fim=new Date(ini.getTime()+91*86400000),hoje=new Date();if(hoje>=fim)return 100;if(hoje<=ini)return 0;return Math.min(100,Math.round((hoje-ini)/(fim-ini)*100));}
 
 let _lista=[], _criterio='menor-tempo', _filtro='', _filtroCard='todos';
+let _inspecoesMap = {}; // uc → inspecao mais recente
 
+// ============================================================
+// MODAL DE DELEGAÇÃO
+// ============================================================
+function abrirModalDelegar(uc, dias, dataSaida) {
+  const insp = _inspecoesMap[uc];
+  document.getElementById('modal-delegar').style.display = 'flex';
+  document.getElementById('modal-uc-label').textContent   = `UC ${uc}`;
+  document.getElementById('modal-dias-label').textContent = dias !== null ? `${dias} dias restantes · Sai em ${dataSaida}` : '';
+  document.getElementById('modal-uc-val').value   = uc;
+  document.getElementById('modal-dias-val').value = dias ?? '';
+  document.getElementById('modal-saida-val').value = dataSaida ?? '';
+
+  // Pré-preenche se já tem delegação
+  document.getElementById('sel-fiscal').value = insp?.fiscal || '';
+  document.getElementById('sel-status').value = insp?.status || 'pendente';
+  document.getElementById('sel-acao').value   = insp?.acao   || '';
+  document.getElementById('txt-obs').value    = insp?.observacao || '';
+  toggleAcao();
+
+  // Mostra histórico de delegação anterior se existir
+  const hist = document.getElementById('modal-historico');
+  if (insp) {
+    const statusLabel = { pendente:'⏳ Pendente', ok:'✅ Tudo OK', acao_necessaria:'⚠ Ação necessária' };
+    const acaoLabel   = ACOES.find(a => a.value === insp.acao)?.label || '';
+    hist.innerHTML = `
+      <div style="background:var(--eq-gray-50);border-radius:8px;padding:12px;font-size:.8rem;border:1px solid var(--eq-gray-200)">
+        <div style="font-weight:700;color:var(--eq-gray-700);margin-bottom:6px">📋 Última delegação</div>
+        <div>Fiscal: <strong>${insp.fiscal}</strong></div>
+        <div>Status: <strong>${statusLabel[insp.status]||insp.status}</strong></div>
+        ${insp.acao ? `<div>Ação: <strong>${acaoLabel}</strong></div>` : ''}
+        ${insp.observacao ? `<div>Obs: <em>${insp.observacao}</em></div>` : ''}
+        <div style="color:var(--eq-gray-500);margin-top:4px">Delegado em: ${fmtDate(insp.delegado_em)}</div>
+        ${insp.inspecionado_em ? `<div style="color:var(--eq-gray-500)">Inspecionado em: ${fmtDate(insp.inspecionado_em)}</div>` : ''}
+      </div>`;
+    hist.style.display = 'block';
+  } else {
+    hist.innerHTML = '';
+    hist.style.display = 'none';
+  }
+}
+
+function fecharModalDelegar() {
+  document.getElementById('modal-delegar').style.display = 'none';
+}
+
+function toggleAcao() {
+  const status = document.getElementById('sel-status').value;
+  const acaoRow = document.getElementById('acao-row');
+  acaoRow.style.display = status === 'acao_necessaria' ? 'block' : 'none';
+}
+
+async function salvarDelegacao() {
+  const uc       = document.getElementById('modal-uc-val').value;
+  const dias     = parseInt(document.getElementById('modal-dias-val').value) || null;
+  const saida    = document.getElementById('modal-saida-val').value || null;
+  const fiscal   = document.getElementById('sel-fiscal').value;
+  const status   = document.getElementById('sel-status').value;
+  const acao     = document.getElementById('sel-acao').value || null;
+  const obs      = document.getElementById('txt-obs').value.trim() || null;
+
+  if (!fiscal) { alert('Selecione um fiscal.'); return; }
+
+  const btn = document.getElementById('btn-salvar-delegacao');
+  btn.textContent = 'Salvando...'; btn.disabled = true;
+
+  try {
+    const payload = {
+      uc, fiscal, status, acao, observacao: obs,
+      dias_restantes: dias, data_saida: saida,
+      delegado_em: new Date().toISOString(),
+      inspecionado_em: status !== 'pendente' ? new Date().toISOString() : null,
+    };
+
+    const { error } = await db.from('inspecoes').insert(payload);
+    if (error) throw error;
+
+    // Atualiza mapa local
+    _inspecoesMap[uc] = payload;
+
+    fecharModalDelegar();
+    aplicarFiltroOrdem(); // re-renderiza para mostrar badge atualizado
+  } catch(err) {
+    alert(`Erro ao salvar: ${err.message}`);
+  } finally {
+    btn.textContent = 'Salvar'; btn.disabled = false;
+  }
+}
+
+// ============================================================
+// STATUS BADGE DE INSPEÇÃO
+// ============================================================
+function badgeInspecao(uc) {
+  const i = _inspecoesMap[uc];
+  if (!i) return `<button class="btn-delegar" onclick="abrirModalDelegar('${uc}',${diasRestantes(_lista.find(h=>h.uc===uc)?.data_conc)??'null'},'${_lista.find(h=>h.uc===uc)?fmtDateShort(_lista.find(h=>h.uc===uc).fim90.toISOString()):''}')">👁 Delegar inspeção</button>`;
+  const cores = { pendente:'var(--eq-amber-dark)', ok:'var(--eq-green)', acao_necessaria:'var(--eq-red)' };
+  const icons = { pendente:'⏳', ok:'✅', acao_necessaria:'⚠' };
+  const labels= { pendente:'Inspeção pendente', ok:'Tudo OK', acao_necessaria:'Ação necessária' };
+  const acaoLabel = ACOES.find(a => a.value === i.acao)?.label || '';
+  return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
+    <span style="font-size:.72rem;font-weight:700;color:${cores[i.status]}">${icons[i.status]} ${labels[i.status]}</span>
+    ${i.acao ? `<span style="font-size:.7rem;color:var(--eq-gray-500)">${acaoLabel}</span>` : ''}
+    <span style="font-size:.7rem;color:var(--eq-gray-400)">— ${i.fiscal}</span>
+    <button class="btn-delegar btn-delegar--small" onclick="abrirModalDelegar('${uc}',${diasRestantes(_lista.find(h=>h.uc===uc)?.data_conc)??'null'},'${_lista.find(h=>h.uc===uc)?fmtDateShort(_lista.find(h=>h.uc===uc).fim90.toISOString()):''}')">✏ Atualizar</button>
+  </div>`;
+}
+
+// ============================================================
+// RENDER DA LISTA
+// ============================================================
 function toggleDropdown(uid){const body=document.getElementById('body_'+uid),icon=document.getElementById('icon_'+uid),item=document.getElementById('item_'+uid);if(!body)return;const open=body.style.display!=='none';body.style.display=open?'none':'block';if(icon)icon.textContent=open?'▾':'▴';if(item)item.classList.toggle('dropdown-open',!open);}
 
 function renderLista(lista){
@@ -20,11 +138,13 @@ function renderLista(lista){
     const uid=h.uc.replace(/\W/g,'_');
     const hist=(h.historico||[]).sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
     const rows=hist.map((at,i)=>`<tr><td><span class="atend-num-badge">${i+1}</span></td><td><strong>${at.os||'----'}</strong></td><td>${fmtDate(at.data_origem)}</td><td>${fmtDate(at.data_conc)}</td><td>${at.prefixo||'----'}</td><td>${at.causa||'----'}</td><td>${badgeProcedencia(at.causa)}</td></tr>`).join('');
+    const dataSaida = fmtDateShort(h.fim90.toISOString());
     return `<div class="dropdown-item" id="item_${uid}">
       <div class="dropdown-header" onclick="toggleDropdown('${uid}')">
         <div class="dropdown-header-left">
           <div class="dropdown-uc">UC ${h.uc}</div>
           <div class="dropdown-meta">${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
+          ${badgeInspecao(h.uc)}
         </div>
         <div class="dropdown-header-right">
           <div class="dropdown-progress">
@@ -32,7 +152,7 @@ function renderLista(lista){
             <div class="dias-bar-outer" style="height:6px"><div class="dias-bar-inner ${barCls}" style="width:${pct}%"></div></div>
           </div>
           <div class="dropdown-dias-badge ${diasCls}"><span class="dropdown-dias-num">${dias}</span><span class="dropdown-dias-label">dias restantes</span></div>
-          <div class="dropdown-saida"><span style="font-size:.68rem;color:var(--eq-gray-400);display:block">Sai em</span><span style="font-size:.78rem;font-weight:700;color:${dias<=10?'var(--eq-red)':dias<=30?'var(--eq-amber-dark)':'var(--eq-green)'}">${fmtDateShort(h.fim90.toISOString())}</span></div>
+          <div class="dropdown-saida"><span style="font-size:.68rem;color:var(--eq-gray-400);display:block">Sai em</span><span style="font-size:.78rem;font-weight:700;color:${dias<=10?'var(--eq-red)':dias<=30?'var(--eq-amber-dark)':'var(--eq-green)'}">${dataSaida}</span></div>
           <span class="dropdown-chevron" id="icon_${uid}">▾</span>
         </div>
       </div>
@@ -49,13 +169,10 @@ function renderLista(lista){
 
 function listaFiltrada(){
   let lista=[..._lista];
-  // Filtro por card
   if(_filtroCard==='critico') lista=lista.filter(h=>diasRestantes(h.data_conc)<=10);
   else if(_filtroCard==='alerta') lista=lista.filter(h=>{const d=diasRestantes(h.data_conc);return d>10&&d<=30;});
   else if(_filtroCard==='ok') lista=lista.filter(h=>diasRestantes(h.data_conc)>30);
-  // Filtro por UC
   if(_filtro.trim()) lista=lista.filter(h=>h.uc.toLowerCase().includes(_filtro.trim().toLowerCase()));
-  // Ordenação
   if(_criterio==='maior-tempo') lista.sort((a,b)=>diasRestantes(b.data_conc)-diasRestantes(a.data_conc));
   if(_criterio==='menor-tempo') lista.sort((a,b)=>diasRestantes(a.data_conc)-diasRestantes(b.data_conc));
   if(_criterio==='mais-atend')  lista.sort((a,b)=>(b.qtd_atendimentos||1)-(a.qtd_atendimentos||1));
@@ -71,10 +188,7 @@ function aplicarFiltroOrdem(){
 
 function filtrarCard(tipo){
   _filtroCard=_filtroCard===tipo?'todos':tipo;
-  // Atualiza visual dos cards
-  document.querySelectorAll('.stat-card[data-filtro]').forEach(el=>{
-    el.classList.toggle('stat-card--active', el.dataset.filtro===_filtroCard);
-  });
+  document.querySelectorAll('.stat-card[data-filtro]').forEach(el=>{el.classList.toggle('stat-card--active',el.dataset.filtro===_filtroCard);});
   aplicarFiltroOrdem();
 }
 
@@ -85,32 +199,36 @@ function ordenarLista(criterio){_criterio=criterio;document.querySelectorAll('.s
 function exportarExcel(){
   const lista=listaFiltrada();
   if(!lista.length){alert('Nenhuma UC para exportar.');return;}
-
-  const linhas=[['UC','Data Último Atendimento','Procedência','Causa','Dias Restantes','Sai do Retrabalho em']];
+  const linhas=[['UC','Data Último Atendimento','Procedência','Causa','Dias Restantes','Sai do Retrabalho em','Fiscal','Status Inspeção','Ação','Observação']];
   for(const h of lista){
     const proc=isProcedente?isProcedente(h.causa):(h.causa&&h.causa!=='----');
+    const insp=_inspecoesMap[h.uc];
+    const statusLabel={pendente:'Pendente',ok:'Tudo OK',acao_necessaria:'Ação necessária'};
+    const acaoLabel=ACOES.find(a=>a.value===insp?.acao)?.label||'';
     linhas.push([
       h.uc,
-      h.data_conc ? new Date(h.data_conc).toLocaleDateString('pt-BR') : '----',
+      h.data_conc?new Date(h.data_conc).toLocaleDateString('pt-BR'):'----',
       proc?'Procedente':'Improcedente',
       h.causa||'----',
       diasRestantes(h.data_conc)??'----',
       fmtDateShort(h.fim90.toISOString()),
+      insp?.fiscal||'—',
+      statusLabel[insp?.status]||'—',
+      acaoLabel||'—',
+      insp?.observacao||'—',
     ]);
   }
-
-  // Gera CSV com BOM para Excel reconhecer UTF-8
   const bom='\uFEFF';
   const csv=bom+linhas.map(row=>row.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
-  a.href=url;
+  a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   a.download=`retrabalho_${_filtroCard}_${new Date().toISOString().slice(0,10)}.csv`;
   a.click();
-  URL.revokeObjectURL(url);
 }
 
+// ============================================================
+// CARREGAMENTO
+// ============================================================
 async function carregar(){
   document.getElementById('det-container').innerHTML=`<div class="loading-state"><div class="spinner"></div><br>Carregando...</div>`;
   try {
@@ -119,11 +237,20 @@ async function carregar(){
       while(true){const{data}=await query.range(page*1000,page*1000+999);if(!data||!data.length)break;all=all.concat(data);if(data.length<1000)break;page++;}
       return all;
     }
-    const [ativas, hist] = await Promise.all([
+
+    const [ativas, hist, inspecoes] = await Promise.all([
       fetchAll(db.from('visao_atual').select('uc,em_historico')),
       fetchAll(db.from('historico').select('*')),
+      fetchAll(db.from('inspecoes').select('*').order('delegado_em',{ascending:false})),
     ]);
-    const ucsComAlerta = new Set((ativas||[]).filter(o=>o.em_historico).map(o=>o.uc));
+
+    // Monta mapa de inspeções — mantém só a mais recente por UC
+    _inspecoesMap = {};
+    for (const i of inspecoes) {
+      if (!_inspecoesMap[i.uc]) _inspecoesMap[i.uc] = i;
+    }
+
+    const ucsComAlerta=new Set((ativas||[]).filter(o=>o.em_historico).map(o=>o.uc));
     const hoje=new Date();
     _lista=(hist||[]).filter(h=>{
       if(!h.data_conc)return false;
@@ -132,29 +259,32 @@ async function carregar(){
     }).map(h=>({...h,fim90:new Date(new Date(h.data_conc).getTime()+91*86400000)}));
     _lista.sort((a,b)=>diasRestantes(a.data_conc)-diasRestantes(b.data_conc));
 
-    const total   = _lista.length;
-    const critico = _lista.filter(h=>diasRestantes(h.data_conc)<=10).length;
-    const alerta  = _lista.filter(h=>{const d=diasRestantes(h.data_conc);return d>10&&d<=30;}).length;
-    const ok      = _lista.filter(h=>diasRestantes(h.data_conc)>30).length;
+    const total=_lista.length;
+    const critico=_lista.filter(h=>diasRestantes(h.data_conc)<=10).length;
+    const alerta=_lista.filter(h=>{const d=diasRestantes(h.data_conc);return d>10&&d<=30;}).length;
+    const ok=_lista.filter(h=>diasRestantes(h.data_conc)>30).length;
+    const delegadas=Object.keys(_inspecoesMap).filter(uc=>_lista.some(h=>h.uc===uc)).length;
 
     document.getElementById('stats-det').innerHTML=`
       <div class="alert-stats" style="margin-bottom:24px">
-        <div class="stat-card info" data-filtro="todos" onclick="filtrarCard('todos')" style="cursor:pointer" title="Ver todas">
-          <div class="stat-value">${total}</div>
-          <div class="stat-label">UCs em Retrabalho sem Ocorrência Ativa</div>
+        <div class="stat-card info" data-filtro="todos" onclick="filtrarCard('todos')" style="cursor:pointer">
+          <div class="stat-value">${total}</div><div class="stat-label">UCs em Retrabalho sem Ocorrência Ativa</div>
         </div>
-        <div class="stat-card danger" data-filtro="critico" onclick="filtrarCard('critico')" style="cursor:pointer" title="Filtrar: menos de 10 dias">
-          <div class="stat-value">${critico}</div>
-          <div class="stat-label">Saem em menos de 10 dias</div>
+        <div class="stat-card danger" data-filtro="critico" onclick="filtrarCard('critico')" style="cursor:pointer">
+          <div class="stat-value">${critico}</div><div class="stat-label">Saem em menos de 10 dias</div>
         </div>
-        <div class="stat-card warning" data-filtro="alerta" onclick="filtrarCard('alerta')" style="cursor:pointer" title="Filtrar: 10 a 30 dias">
-          <div class="stat-value">${alerta}</div>
-          <div class="stat-label">Saem em 10 a 30 dias</div>
+        <div class="stat-card warning" data-filtro="alerta" onclick="filtrarCard('alerta')" style="cursor:pointer">
+          <div class="stat-value">${alerta}</div><div class="stat-label">Saem em 10 a 30 dias</div>
         </div>
-        <div class="stat-card success" data-filtro="ok" onclick="filtrarCard('ok')" style="cursor:pointer" title="Filtrar: mais de 30 dias">
-          <div class="stat-value">${ok}</div>
-          <div class="stat-label">Saem em mais de 30 dias</div>
+        <div class="stat-card success" data-filtro="ok" onclick="filtrarCard('ok')" style="cursor:pointer">
+          <div class="stat-value">${ok}</div><div class="stat-label">Saem em mais de 30 dias</div>
         </div>
+      </div>
+      <div style="font-size:.82rem;color:var(--eq-gray-500);margin-bottom:16px">
+        👁 <strong>${delegadas}</strong> UCs com inspeção delegada ·
+        ✅ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='ok'&&_lista.some(h=>h.uc===i.uc)).length}</strong> OK ·
+        ⚠ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='acao_necessaria'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Ação necessária ·
+        ⏳ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='pendente'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Pendentes
       </div>`;
 
     document.getElementById('det-container').innerHTML=`
