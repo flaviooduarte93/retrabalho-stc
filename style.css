@@ -1824,3 +1824,34 @@ body {
   0%   { transform: translateX(-100%); }
   100% { transform: translateX(300%); }
 }
+
+/* ===== DELEGAÇÃO DE INSPEÇÃO ===== */
+.btn-delegar {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 12px; border-radius: 20px;
+  border: 1.5px solid var(--eq-blue); background: var(--eq-blue-pale);
+  color: var(--eq-blue-dark); font-family: inherit;
+  font-size: .72rem; font-weight: 700; cursor: pointer;
+  margin-top: 6px; transition: all .15s;
+}
+.btn-delegar:hover { background: var(--eq-blue); color: #fff; }
+.btn-delegar--small {
+  padding: 2px 8px; font-size: .68rem;
+  border-color: var(--eq-gray-300); background: var(--eq-gray-50);
+  color: var(--eq-gray-600);
+}
+.btn-delegar--small:hover { background: var(--eq-gray-200); color: var(--eq-gray-900); }
+
+/* Radio cards do modal */
+.radio-card {
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px; border-radius: 10px;
+  border: 1.5px solid var(--eq-gray-200); cursor: pointer;
+  font-size: .82rem; font-weight: 600; color: var(--eq-gray-700);
+  transition: all .15s; user-select: none;
+}
+.radio-card input[type="radio"] { accent-color: var(--eq-blue); }
+.radio-card:has(input:checked) {
+  border-color: var(--eq-blue); background: var(--eq-blue-pale);
+  color: var(--eq-blue-dark);
+}
