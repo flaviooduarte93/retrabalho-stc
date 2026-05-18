@@ -49,6 +49,8 @@ function abrirModalDelegar(uc, dias, dataSaida) {
         ${insp.observacao ? `<div>Obs: <em>${insp.observacao}</em></div>` : ''}
         <div style="color:var(--eq-gray-500);margin-top:4px">Delegado em: ${fmtDate(insp.delegado_em)}</div>
         ${insp.inspecionado_em ? `<div style="color:var(--eq-gray-500)">Inspecionado em: ${fmtDate(insp.inspecionado_em)}</div>` : ''}
+      </div>
+      <a href="inspecoes.html" style="font-size:.78rem;font-weight:700;color:var(--eq-blue);text-decoration:none;white-space:nowrap">📊 Ver painel de inspeções →</a>
       </div>`;
     hist.style.display = 'block';
   } else {
@@ -295,7 +297,8 @@ async function carregar(){
           <div class="stat-value">${ok}</div><div class="stat-label">Saem em mais de 30 dias</div>
         </div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;align-items:center">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <span style="font-size:.75rem;color:var(--eq-gray-400)">Filtrar por inspeção:</span>
         <button class="insp-badge-btn" data-filtro-insp="delegadas" onclick="filtrarInsp('delegadas')">
           👁 <strong>${delegadas}</strong> Delegadas
