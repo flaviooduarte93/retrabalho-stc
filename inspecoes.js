@@ -52,6 +52,19 @@ function toggleDataExec() {
   document.getElementById('exec-fields').style.display = show ? 'block' : 'none';
 }
 
+async function excluirInspecoesUC(uc) {
+  if (!confirm(`Excluir TODAS as inspeções da UC ${uc}?
+
+Essa ação é irreversível e a UC voltará a aparecer sem inspeção.`)) return;
+  try {
+    const { error } = await db.from('inspecoes').delete().eq('uc', uc);
+    if (error) throw error;
+    await carregar();
+  } catch(err) {
+    alert(`Erro ao excluir: ${err.message}`);
+  }
+}
+
 async function salvarAcao() {
   const id     = parseInt(document.getElementById('acao-insp-id').value);
   const st     = document.querySelector('[name="acao-st"]:checked')?.value || 'pendente';
@@ -204,9 +217,10 @@ function renderAcoesPendentes() {
                 <div style="font-size:.72rem;color:var(--eq-gray-400)">Aguardando há</div>
                 <div style="font-weight:800;font-size:1.1rem;color:${urgencia}">${diasAguardando}d</div>
               </div>
-              <button onclick="abrirModalAcao(${i.id})" style="padding:6px 14px;border-radius:8px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">
-                Atualizar →
-              </button>
+              <div style="display:flex;gap:6px">
+                <button onclick="abrirModalAcao(${i.id})" style="padding:6px 14px;border-radius:8px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">Atualizar →</button>
+                <button onclick="excluirInspecoesUC('${i.uc}')" title="Excluir inspeção" style="padding:6px 10px;border-radius:8px;border:1.5px solid var(--eq-red);background:transparent;color:var(--eq-red);font-size:.78rem;cursor:pointer">🗑</button>
+              </div>
             </div>
           </div>`;
         }).join('')}
@@ -237,7 +251,10 @@ function renderTabela(lista) {
       <td style="font-size:.78rem">${fmtDate(i.acao_executada_em)}</td>
       <td style="text-align:center">${i.dias_restantes !== null && i.dias_restantes !== undefined ? `<span style="font-weight:700;color:${i.dias_restantes<=10?'var(--eq-red)':i.dias_restantes<=30?'var(--eq-amber-dark)':'var(--eq-green)'}">${i.dias_restantes}d</span>` : '—'}</td>
       <td style="max-width:200px;font-size:.75rem;color:var(--eq-gray-600)">${i.observacao||''} ${i.conclusao_obs?`<br><em style="color:var(--eq-green)">✓ ${i.conclusao_obs}</em>`:''}</td>
-      <td>${btnAtualizar}</td>
+      <td style="display:flex;gap:6px">
+        ${btnAtualizar}
+        <button onclick="excluirInspecoesUC('${i.uc}')" title="Excluir todas inspeções desta UC" style="padding:4px 8px;border-radius:6px;border:1.5px solid var(--eq-red);background:transparent;color:var(--eq-red);font-family:inherit;font-size:.72rem;cursor:pointer">🗑</button>
+      </td>
     </tr>`;
   }).join('');
 }
