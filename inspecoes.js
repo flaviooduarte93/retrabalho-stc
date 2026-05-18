@@ -1,0 +1,288 @@
+// js/inspecoes.js — Painel de Inspeções
+
+const ACOES_LABEL = {
+  troca_conector: 'Troca de conector',
+  troca_ramal:    'Troca do ramal',
+  poda_arvore:    'Poda de árvore',
+  outros:         'Outros',
+};
+const ACAO_ST_LABEL = {
+  pendente:       { label:'⏳ Pendente',       cor:'var(--eq-amber-dark)' },
+  em_andamento:   { label:'🔄 Em andamento',   cor:'var(--eq-blue)' },
+  concluida:      { label:'✅ Concluída',       cor:'var(--eq-green)' },
+  nao_executada:  { label:'❌ Não executada',   cor:'var(--eq-red)' },
+};
+const STATUS_LABEL = {
+  pendente:         { label:'⏳ Pendente',          cor:'var(--eq-amber-dark)' },
+  ok:               { label:'✅ Tudo OK',            cor:'var(--eq-green)' },
+  acao_necessaria:  { label:'⚠ Ação necessária',    cor:'var(--eq-red)' },
+};
+
+function fmtDate(iso){ if(!iso)return'----'; return new Date(iso).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}); }
+function diasDesde(iso){ if(!iso)return null; return Math.floor((new Date()-new Date(iso))/86400000); }
+
+let _todos = [], _chartFiscal = null, _chartAcoes = null;
+
+// ============================================================
+// MODAL ATUALIZAR AÇÃO
+// ============================================================
+function abrirModalAcao(id) {
+  const insp = _todos.find(i => i.id === id);
+  if (!insp) return;
+  document.getElementById('modal-acao').style.display    = 'flex';
+  document.getElementById('acao-uc-label').textContent   = `UC ${insp.uc}`;
+  document.getElementById('acao-detalhe-label').textContent = `${ACOES_LABEL[insp.acao]||'—'} · Fiscal: ${insp.fiscal}`;
+  document.getElementById('acao-insp-id').value          = id;
+  document.getElementById('exec-por').value              = insp.acao_executada_por || '';
+  document.getElementById('exec-obs').value              = insp.conclusao_obs || '';
+  document.getElementById('exec-data').value             = insp.acao_executada_em
+    ? new Date(insp.acao_executada_em).toISOString().slice(0,16) : '';
+
+  // Marca radio correto
+  const st = insp.acao_status || 'pendente';
+  document.querySelectorAll('[name="acao-st"]').forEach(r => { r.checked = r.value === st; });
+  toggleDataExec();
+}
+
+function fecharModalAcao() { document.getElementById('modal-acao').style.display = 'none'; }
+
+function toggleDataExec() {
+  const st = document.querySelector('[name="acao-st"]:checked')?.value || 'pendente';
+  const show = st === 'concluida' || st === 'em_andamento';
+  document.getElementById('exec-fields').style.display = show ? 'block' : 'none';
+}
+
+async function salvarAcao() {
+  const id     = parseInt(document.getElementById('acao-insp-id').value);
+  const st     = document.querySelector('[name="acao-st"]:checked')?.value || 'pendente';
+  const por    = document.getElementById('exec-por').value.trim() || null;
+  const data   = document.getElementById('exec-data').value;
+  const obs    = document.getElementById('exec-obs').value.trim() || null;
+  const btn    = document.getElementById('btn-salvar-acao');
+  btn.textContent = 'Salvando...'; btn.disabled = true;
+
+  try {
+    const { error } = await db.from('inspecoes').update({
+      acao_status:          st,
+      acao_executada_por:   por,
+      acao_executada_em:    data ? new Date(data).toISOString() : null,
+      conclusao_obs:        obs,
+    }).eq('id', id);
+    if (error) throw error;
+
+    fecharModalAcao();
+    await carregar();
+  } catch(err) {
+    alert(`Erro: ${err.message}`);
+  } finally {
+    btn.textContent = 'Salvar'; btn.disabled = false;
+  }
+}
+
+// ============================================================
+// FILTROS E RENDER
+// ============================================================
+function dadosFiltrados() {
+  const fiscal    = document.getElementById('filtro-fiscal')?.value    || '';
+  const status    = document.getElementById('filtro-status')?.value    || '';
+  const acaoSt    = document.getElementById('filtro-acao-status')?.value || '';
+  const buscaUC   = document.getElementById('busca-uc')?.value.trim().toLowerCase() || '';
+
+  return _todos.filter(i => {
+    if (fiscal  && i.fiscal  !== fiscal)  return false;
+    if (status  && i.status  !== status)  return false;
+    if (acaoSt  && i.acao_status !== acaoSt) return false;
+    if (buscaUC && !i.uc.toLowerCase().includes(buscaUC)) return false;
+    return true;
+  });
+}
+
+function aplicarFiltros() {
+  const lista = dadosFiltrados();
+  renderTabela(lista);
+  renderGraficos(lista);
+  renderAcoesPendentes();
+}
+
+function renderKPIs(todos) {
+  const acaoNec  = todos.filter(i => i.status === 'acao_necessaria');
+  const concluidas = acaoNec.filter(i => i.acao_status === 'concluida');
+  const pendAcao   = acaoNec.filter(i => i.acao_status === 'pendente' || !i.acao_status);
+
+  // Tempo médio de resolução (apenas concluídas)
+  const tempos = concluidas
+    .filter(i => i.delegado_em && i.acao_executada_em)
+    .map(i => Math.floor((new Date(i.acao_executada_em)-new Date(i.delegado_em))/86400000));
+  const tempoMedio = tempos.length ? Math.round(tempos.reduce((a,b)=>a+b,0)/tempos.length) : null;
+
+  document.getElementById('kpi-container').innerHTML = `
+    <div class="alert-stats" style="margin-bottom:20px">
+      <div class="stat-card info">
+        <div class="stat-value">${todos.length}</div>
+        <div class="stat-label">Total de inspeções</div>
+      </div>
+      <div class="stat-card warning">
+        <div class="stat-value">${acaoNec.length}</div>
+        <div class="stat-label">⚠ Ações necessárias</div>
+      </div>
+      <div class="stat-card danger">
+        <div class="stat-value">${pendAcao.length}</div>
+        <div class="stat-label">⏳ Ações pendentes</div>
+      </div>
+      <div class="stat-card success">
+        <div class="stat-value">${concluidas.length}</div>
+        <div class="stat-label">✅ Ações concluídas</div>
+      </div>
+      <div class="stat-card info" style="border-color:var(--eq-blue)">
+        <div class="stat-value">${tempoMedio !== null ? tempoMedio+'d' : '—'}</div>
+        <div class="stat-label">Tempo médio de resolução</div>
+      </div>
+    </div>`;
+}
+
+function renderGraficos(lista) {
+  const font = { family:"'Plus Jakarta Sans',sans-serif", size:11 };
+
+  // Gráfico por fiscal
+  const porFiscal = {};
+  lista.forEach(i => { if(!porFiscal[i.fiscal]) porFiscal[i.fiscal]={ok:0,acao:0,pendente:0}; porFiscal[i.fiscal][i.status==='ok'?'ok':i.status==='acao_necessaria'?'acao':'pendente']++; });
+  const fiscais = Object.keys(porFiscal);
+  if (_chartFiscal) _chartFiscal.destroy();
+  const ctx1 = document.getElementById('chart-fiscal')?.getContext('2d');
+  if (ctx1) _chartFiscal = new Chart(ctx1, {
+    type:'bar',
+    data:{ labels:fiscais.map(f=>f.split(' ')[0]),
+      datasets:[
+        {label:'OK',data:fiscais.map(f=>porFiscal[f].ok),backgroundColor:'rgba(46,125,50,.8)'},
+        {label:'Ação',data:fiscais.map(f=>porFiscal[f].acao),backgroundColor:'rgba(198,40,40,.8)'},
+        {label:'Pendente',data:fiscais.map(f=>porFiscal[f].pendente),backgroundColor:'rgba(249,168,37,.8)'},
+      ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font}}},scales:{x:{stacked:true,ticks:{font}},y:{stacked:true,ticks:{font}}}}
+  });
+
+  // Gráfico tipos de ação
+  const porAcao = {};
+  lista.filter(i=>i.acao).forEach(i=>{ porAcao[i.acao]=(porAcao[i.acao]||0)+1; });
+  if (_chartAcoes) _chartAcoes.destroy();
+  const ctx2 = document.getElementById('chart-acoes')?.getContext('2d');
+  if (ctx2 && Object.keys(porAcao).length) _chartAcoes = new Chart(ctx2, {
+    type:'doughnut',
+    data:{
+      labels:Object.keys(porAcao).map(k=>ACOES_LABEL[k]||k),
+      datasets:[{data:Object.values(porAcao),backgroundColor:['#1565C0','#F9A825','#2E7D32','#757575']}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font,boxWidth:12}}}}
+  });
+}
+
+function renderAcoesPendentes() {
+  const pendentes = _todos
+    .filter(i => i.status==='acao_necessaria' && (i.acao_status==='pendente'||!i.acao_status))
+    .sort((a,b) => new Date(a.delegado_em)-new Date(b.delegado_em));
+
+  const el = document.getElementById('acoes-pendentes-container');
+  if (!pendentes.length) { el.innerHTML=''; return; }
+
+  el.innerHTML = `
+    <div class="result-card" style="margin-bottom:20px;border-left:4px solid var(--eq-red)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+        <span style="font-size:1.1rem">🚨</span>
+        <div class="gantt-title" style="margin-bottom:0;color:var(--eq-red)">Ações Pendentes de Execução (${pendentes.length})</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        ${pendentes.map(i => {
+          const diasAguardando = diasDesde(i.delegado_em);
+          const urgencia = diasAguardando > 30 ? 'var(--eq-red)' : diasAguardando > 7 ? 'var(--eq-amber-dark)' : 'var(--eq-gray-600)';
+          return `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px;background:var(--eq-gray-50);border-radius:10px;border:1px solid var(--eq-gray-100)">
+            <div>
+              <div style="font-weight:700;color:var(--eq-blue-dark)">UC ${i.uc}</div>
+              <div style="font-size:.78rem;color:var(--eq-gray-600)">${ACOES_LABEL[i.acao]||'—'} · Fiscal: <strong>${i.fiscal}</strong></div>
+              ${i.observacao ? `<div style="font-size:.75rem;color:var(--eq-gray-500);margin-top:2px;font-style:italic">"${i.observacao}"</div>` : ''}
+            </div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="text-align:right">
+                <div style="font-size:.72rem;color:var(--eq-gray-400)">Aguardando há</div>
+                <div style="font-weight:800;font-size:1.1rem;color:${urgencia}">${diasAguardando}d</div>
+              </div>
+              <button onclick="abrirModalAcao(${i.id})" style="padding:6px 14px;border-radius:8px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">
+                Atualizar →
+              </button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+}
+
+function renderTabela(lista) {
+  const tbody = document.getElementById('tabela-body');
+  if (!lista.length) {
+    tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--eq-gray-400)">Nenhuma inspeção encontrada.</td></tr>';
+    return;
+  }
+  const sorted = [...lista].sort((a,b)=>new Date(b.delegado_em)-new Date(a.delegado_em));
+  tbody.innerHTML = sorted.map(i => {
+    const st    = STATUS_LABEL[i.status]    || { label:i.status, cor:'var(--eq-gray-500)' };
+    const acSt  = ACAO_ST_LABEL[i.acao_status] || { label:'—', cor:'var(--eq-gray-400)' };
+    const btnAtualizar = i.status==='acao_necessaria'
+      ? `<button onclick="abrirModalAcao(${i.id})" style="padding:4px 10px;border-radius:6px;border:1.5px solid var(--eq-blue);background:transparent;color:var(--eq-blue);font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer">Atualizar</button>`
+      : '';
+    return `<tr>
+      <td><a href="pesquisa.html?uc=${i.uc}" style="color:var(--eq-blue-dark);font-weight:700">${i.uc}</a></td>
+      <td>${i.fiscal}</td>
+      <td><span style="font-size:.72rem;font-weight:700;color:${st.cor}">${st.label}</span></td>
+      <td>${i.acao ? ACOES_LABEL[i.acao]||i.acao : '—'}</td>
+      <td>${i.status==='acao_necessaria'?`<span style="font-size:.72rem;font-weight:700;color:${acSt.cor}">${acSt.label}</span>`:'—'}</td>
+      <td style="font-size:.78rem">${fmtDate(i.delegado_em)}</td>
+      <td style="font-size:.78rem">${fmtDate(i.acao_executada_em)}</td>
+      <td style="text-align:center">${i.dias_restantes !== null && i.dias_restantes !== undefined ? `<span style="font-weight:700;color:${i.dias_restantes<=10?'var(--eq-red)':i.dias_restantes<=30?'var(--eq-amber-dark)':'var(--eq-green)'}">${i.dias_restantes}d</span>` : '—'}</td>
+      <td style="max-width:200px;font-size:.75rem;color:var(--eq-gray-600)">${i.observacao||''} ${i.conclusao_obs?`<br><em style="color:var(--eq-green)">✓ ${i.conclusao_obs}</em>`:''}</td>
+      <td>${btnAtualizar}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportarCSV() {
+  const lista = dadosFiltrados();
+  const bom = '\uFEFF';
+  const cabecalho = ['UC','Fiscal','Status','Ação','Status Ação','Executado por','Delegado em','Executado em','Dias restantes','Observação','Obs. conclusão'];
+  const linhas = lista.map(i => [
+    i.uc, i.fiscal,
+    STATUS_LABEL[i.status]?.label||i.status,
+    ACOES_LABEL[i.acao]||'—',
+    ACAO_ST_LABEL[i.acao_status]?.label||'—',
+    i.acao_executada_por||'—',
+    fmtDate(i.delegado_em), fmtDate(i.acao_executada_em),
+    i.dias_restantes??'—',
+    i.observacao||'—', i.conclusao_obs||'—',
+  ]);
+  const csv = bom + [cabecalho,...linhas].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  a.download = `inspecoes_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ============================================================
+// CARREGAMENTO
+// ============================================================
+async function carregar() {
+  try {
+    async function fetchAll(q){
+      let all=[],page=0;
+      while(true){const{data}=await q.range(page*1000,page*1000+999);if(!data?.length)break;all=all.concat(data);if(data.length<1000)break;page++;}
+      return all;
+    }
+    _todos = await fetchAll(db.from('inspecoes').select('*').order('delegado_em',{ascending:false}));
+    renderKPIs(_todos);
+    aplicarFiltros();
+    renderAcoesPendentes();
+  } catch(err) {
+    console.error(err);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  carregar();
+  document.getElementById('btn-refresh')?.addEventListener('click', carregar);
+});

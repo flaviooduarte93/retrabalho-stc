@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="theme-color" content="#0D47A1"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Inspeções — Equatorial Retrabalho</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"/>
+  <link rel="stylesheet" href="style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+</head>
+<body class="inner-page">
+  <nav class="topbar">
+    <div class="topbar-brand">
+      <span class="brand-title">eq<span>ua</span>torial</span>
+      <span class="topbar-badge">Retrabalho</span>
+    </div>
+    <div class="topbar-nav">
+      <a href="index.html" class="topbar-navitem">Início</a>
+      <span class="topbar-navsep">›</span>
+      <span class="topbar-navitem topbar-navitem--current">Painel de Inspeções</span>
+    </div>
+  </nav>
+
+  <main class="page-main">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+      <div>
+        <h1 class="page-title" style="margin-bottom:4px">Painel de Inspeções</h1>
+        <p class="page-subtitle">Acompanhamento completo das inspeções delegadas aos fiscais.</p>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <select id="filtro-fiscal" class="filtro-select" onchange="aplicarFiltros()">
+          <option value="">Todos os fiscais</option>
+          <option>Hugo Leonardo</option>
+          <option>Rogério Machado</option>
+          <option>Cainan Ataides</option>
+          <option>Francisco Pereira</option>
+          <option>Paulo Henrique</option>
+        </select>
+        <select id="filtro-status" class="filtro-select" onchange="aplicarFiltros()">
+          <option value="">Todos os status</option>
+          <option value="pendente">⏳ Pendente</option>
+          <option value="ok">✅ Tudo OK</option>
+          <option value="acao_necessaria">⚠ Ação necessária</option>
+        </select>
+        <select id="filtro-acao-status" class="filtro-select" onchange="aplicarFiltros()">
+          <option value="">Todos</option>
+          <option value="pendente">Ação: Pendente</option>
+          <option value="em_andamento">Ação: Em andamento</option>
+          <option value="concluida">Ação: Concluída</option>
+          <option value="nao_executada">Ação: Não executada</option>
+        </select>
+        <button class="search-btn" id="btn-refresh" style="padding:10px 18px;font-size:.85rem">↻ Atualizar</button>
+        <button onclick="exportarCSV()" class="sort-btn" style="background:var(--eq-green);color:white;border-color:var(--eq-green);padding:10px 16px">⬇ Exportar</button>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div id="kpi-container"></div>
+
+    <!-- Gráficos -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:20px" id="charts-row">
+      <div class="result-card">
+        <div class="gantt-title" style="margin-bottom:16px">Inspeções por Fiscal</div>
+        <div style="position:relative;height:220px"><canvas id="chart-fiscal"></canvas></div>
+      </div>
+      <div class="result-card">
+        <div class="gantt-title" style="margin-bottom:16px">Tipos de Ação Necessária</div>
+        <div style="position:relative;height:220px"><canvas id="chart-acoes"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Ações pendentes em destaque -->
+    <div id="acoes-pendentes-container"></div>
+
+    <!-- Tabela completa -->
+    <div class="result-card" style="margin-bottom:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+        <div class="gantt-title">Histórico de Inspeções</div>
+        <div class="filtro-uc-wrap" style="max-width:240px">
+          <svg class="filtro-icon" width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="7" cy="7" r="5" stroke="currentColor" stroke-width="1.6"/><line x1="11" y1="11" x2="15" y2="15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <input id="busca-uc" type="text" class="filtro-uc-input" placeholder="Buscar UC..." oninput="aplicarFiltros()" autocomplete="off"/>
+        </div>
+      </div>
+      <div class="historico-table-wrap">
+        <table class="historico-table" id="tabela-inspecoes">
+          <thead><tr>
+            <th>UC</th><th>Fiscal</th><th>Status</th><th>Ação</th>
+            <th>Status Ação</th><th>Delegado em</th><th>Executado em</th>
+            <th>Dias Restantes</th><th>Observações</th><th></th>
+          </tr></thead>
+          <tbody id="tabela-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <!-- MODAL ATUALIZAR AÇÃO -->
+  <div id="modal-acao" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;align-items:center;justify-content:center;padding:16px">
+    <div style="background:#fff;border-radius:16px;padding:28px 24px;width:100%;max-width:480px;box-shadow:0 24px 64px rgba(0,0,0,.2)">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
+        <div>
+          <div style="font-size:.72rem;font-weight:600;color:var(--eq-gray-400);text-transform:uppercase;letter-spacing:.5px">Atualizar Execução da Ação</div>
+          <div id="acao-uc-label" style="font-size:1.1rem;font-weight:800;color:var(--eq-blue-dark);margin-top:2px"></div>
+          <div id="acao-detalhe-label" style="font-size:.8rem;color:var(--eq-gray-500);margin-top:2px"></div>
+        </div>
+        <button onclick="fecharModalAcao()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--eq-gray-400)">✕</button>
+      </div>
+
+      <input type="hidden" id="acao-insp-id"/>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:8px">📌 Status da execução</label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <label class="radio-card"><input type="radio" name="acao-st" value="pendente" checked onchange="toggleDataExec()"/><span>⏳ Pendente</span></label>
+          <label class="radio-card"><input type="radio" name="acao-st" value="em_andamento" onchange="toggleDataExec()"/><span>🔄 Em andamento</span></label>
+          <label class="radio-card"><input type="radio" name="acao-st" value="concluida" onchange="toggleDataExec()"/><span>✅ Concluída</span></label>
+          <label class="radio-card"><input type="radio" name="acao-st" value="nao_executada" onchange="toggleDataExec()"/><span>❌ Não executada</span></label>
+        </div>
+      </div>
+
+      <div id="exec-fields">
+        <div style="margin-bottom:14px">
+          <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">👷 Executado por</label>
+          <input id="exec-por" type="text" placeholder="Nome do responsável pela execução" style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.85rem;box-sizing:border-box"/>
+        </div>
+        <div style="margin-bottom:14px">
+          <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">📅 Data de execução</label>
+          <input id="exec-data" type="datetime-local" style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.85rem;box-sizing:border-box"/>
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px">
+        <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">📝 Observação de conclusão</label>
+        <textarea id="exec-obs" rows="3" placeholder="Descreva o que foi feito..." style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.85rem;resize:vertical;box-sizing:border-box"></textarea>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button onclick="fecharModalAcao()" style="padding:10px 20px;border-radius:10px;border:1.5px solid var(--eq-gray-200);background:#fff;font-family:inherit;font-size:.88rem;cursor:pointer;color:var(--eq-gray-600)">Cancelar</button>
+        <button id="btn-salvar-acao" onclick="salvarAcao()" style="padding:10px 24px;border-radius:10px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.88rem;font-weight:700;cursor:pointer">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-init.js"></script>
+  <script src="inspecoes.js"></script>
+</body>
+</html>
