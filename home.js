@@ -1,31 +1,7 @@
 // js/home.js
-const SENHA = 'eqtlstcgyn26';
+// Autenticação feita na tela inicial — demais páginas são de acesso livre
 
-function setupModal(btnId, modalId, inputId, errorId, cancelId, confirmId, destino) {
-  const btn    = document.getElementById(btnId);
-  const modal  = document.getElementById(modalId);
-  const input  = document.getElementById(inputId);
-  const error  = document.getElementById(errorId);
-  const cancel = document.getElementById(cancelId);
-  const confirm= document.getElementById(confirmId);
-  if (!btn || !modal) return;
-
-  btn.addEventListener('click', e => { e.preventDefault(); modal.style.display='flex'; setTimeout(()=>input.focus(),100); });
-  cancel.addEventListener('click', ()=>{ modal.style.display='none'; input.value=''; error.style.display='none'; });
-  confirm.addEventListener('click', ()=>verificar());
-  input.addEventListener('keydown', e=>{ if(e.key==='Enter') verificar(); });
-  modal.addEventListener('click', e=>{ if(e.target===modal){modal.style.display='none';input.value='';error.style.display='none';}});
-
-  function verificar() {
-    if (input.value === SENHA) { window.location.href = destino; }
-    else { error.style.display='block'; input.select(); }
-  }
-}
-
-document.addEventListener('DOMContentLoaded', () => {
-  setupModal('btn-alertas','modal-senha','input-senha','modal-error','btn-cancel-modal','btn-confirm-modal','alertas.html');
-  setupModal('btn-detalhamento','modal-senha-det','input-senha-det','modal-error-det','btn-cancel-det','btn-confirm-det','detalhamento.html');
-});
+document.addEventListener('DOMContentLoaded', () => {});
 
 
 // ===== STATUS DAS BASES CARREGADAS =====
