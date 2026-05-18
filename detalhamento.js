@@ -29,10 +29,13 @@ function abrirModalDelegar(uc, dias, dataSaida) {
   document.getElementById('modal-saida-val').value = dataSaida ?? '';
 
   // Pré-preenche se já tem delegação
+  const statusAtual = insp?.status || 'pendente';
   document.getElementById('sel-fiscal').value = insp?.fiscal || '';
-  document.getElementById('sel-status').value = insp?.status || 'pendente';
+  document.getElementById('sel-status').value = statusAtual;
   document.getElementById('sel-acao').value   = insp?.acao   || '';
   document.getElementById('txt-obs').value    = insp?.observacao || '';
+  // Marca o radio correto
+  document.querySelectorAll('[name="status-insp"]').forEach(r => { r.checked = r.value === statusAtual; });
   toggleAcao();
 
   // Mostra histórico de delegação anterior se existir
@@ -87,18 +90,34 @@ async function salvarDelegacao() {
     const payload = {
       uc, fiscal, status, acao, observacao: obs,
       dias_restantes: dias, data_saida: saida,
-      delegado_em: new Date().toISOString(),
       inspecionado_em: status !== 'pendente' ? new Date().toISOString() : null,
     };
 
-    const { error } = await db.from('inspecoes').insert(payload);
+    const existente = _inspecoesMap[uc];
+    let error;
+
+    if (existente?.id) {
+      // Atualiza registro existente
+      ({ error } = await db.from('inspecoes').update(payload).eq('id', existente.id));
+    } else {
+      // Insere novo registro
+      payload.delegado_em = new Date().toISOString();
+      ({ error } = await db.from('inspecoes').insert(payload));
+    }
     if (error) throw error;
 
     // Atualiza mapa local
-    _inspecoesMap[uc] = payload;
+    _inspecoesMap[uc] = { ...existente, ...payload };
 
     fecharModalDelegar();
-    aplicarFiltroOrdem(); // re-renderiza para mostrar badge atualizado
+
+    // Ação necessária → redireciona para o painel de inspeções
+    if (status === 'acao_necessaria') {
+      window.location.href = 'inspecoes.html';
+      return;
+    }
+
+    aplicarFiltroOrdem();
   } catch(err) {
     alert(`Erro ao salvar: ${err.message}`);
   } finally {
