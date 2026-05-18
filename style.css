@@ -1872,3 +1872,21 @@ body {
 .insp-badge-btn.insp-acao.insp-filtro--active    { background: var(--eq-red);         border-color: var(--eq-red); }
 .insp-badge-btn.insp-pendente.insp-filtro--active{ background: var(--eq-amber-dark);  border-color: var(--eq-amber-dark); }
 .insp-badge-btn.insp-sem.insp-filtro--active     { background: var(--eq-gray-600);    border-color: var(--eq-gray-600); }
+
+/* ===== CARD INSPEÇÕES ===== */
+.card-inspecoes {
+  background: linear-gradient(135deg, #4527A0, #311B92);
+  box-shadow: 0 8px 32px rgba(69,39,160,0.3);
+  border-color: rgba(255,255,255,0.1);
+  color: var(--white);
+}
+.card-inspecoes:hover { box-shadow: 0 16px 50px rgba(69,39,160,0.5); }
+
+/* Filtro select */
+.filtro-select {
+  padding: 8px 12px; border-radius: 10px;
+  border: 1.5px solid var(--eq-gray-200);
+  font-family: inherit; font-size: .82rem;
+  color: var(--eq-gray-700); background: #fff;
+  cursor: pointer;
+}
