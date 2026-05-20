@@ -15,18 +15,45 @@
 <body class="home-page">
 
   <!-- ===== TELA DE SENHA ===== -->
-  <div id="senha-overlay" style="display:none;position:fixed;inset:0;z-index:9999;background:var(--eq-gray-900);align-items:center;justify-content:center;padding:24px">
-    <div style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:20px;padding:40px 32px;width:100%;max-width:380px;text-align:center;backdrop-filter:blur(12px)">
-      <div style="width:56px;height:56px;background:rgba(255,255,255,0.12);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;font-size:1.6rem">🔒</div>
-      <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.3rem;font-weight:800;color:#fff;margin-bottom:6px">Sistema de Retrabalho</div>
-      <div style="font-size:.82rem;color:rgba(255,255,255,.5);margin-bottom:28px">Equatorial Energia — Regional Goiânia</div>
-      <input id="input-senha-home" type="password" placeholder="Digite a senha de acesso"
-        style="width:100%;padding:13px 16px;border-radius:12px;border:1.5px solid rgba(255,255,255,.2);background:rgba(255,255,255,.08);color:#fff;font-family:inherit;font-size:.95rem;box-sizing:border-box;outline:none;margin-bottom:10px"
-        onkeydown="if(event.key==='Enter')verificarSenha()"/>
-      <div id="senha-erro" style="color:#FF8A80;font-size:.78rem;margin-bottom:10px;min-height:18px"></div>
-      <button onclick="verificarSenha()" style="width:100%;padding:13px;border-radius:12px;border:none;background:#F9A825;color:#0D47A1;font-family:inherit;font-size:.95rem;font-weight:800;cursor:pointer;transition:opacity .15s">
-        Entrar →
-      </button>
+  <div id="senha-overlay" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;padding:24px">
+    <!-- Mesmo fundo do painel principal -->
+    <div class="bg-grid" style="position:absolute;inset:0;z-index:0"></div>
+    <div class="bg-orb orb-1" style="position:absolute;z-index:0"></div>
+    <div class="bg-orb orb-2" style="position:absolute;z-index:0"></div>
+
+    <div style="position:relative;z-index:1;width:100%;max-width:400px">
+      <!-- Logo idêntica ao painel -->
+      <div style="display:flex;align-items:center;gap:14px;justify-content:center;margin-bottom:36px">
+        <div style="width:44px;height:44px;background:linear-gradient(135deg,#1565C0,#0D47A1);border-radius:50%;display:flex;align-items:center;justify-content:center">
+          <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
+            <path d="M12 24 L24 12 L36 24 L24 36 Z" fill="none" stroke="#fff" stroke-width="2.5"/>
+            <circle cx="24" cy="24" r="4" fill="#F9A825"/>
+          </svg>
+        </div>
+        <div>
+          <div style="font-size:.65rem;font-weight:600;color:rgba(255,255,255,.4);letter-spacing:2px;text-transform:uppercase">GRUPO</div>
+          <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.4rem;font-weight:800;color:#fff;font-style:italic;line-height:1">equatorial</div>
+        </div>
+      </div>
+
+      <!-- Card de login -->
+      <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:36px 32px;text-align:center;backdrop-filter:blur(20px)">
+        <div style="font-size:.75rem;font-weight:600;color:rgba(255,255,255,.4);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px">Sistema de Gestão de</div>
+        <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.6rem;font-weight:800;color:#fff;margin-bottom:4px">Retrabalho</div>
+        <div style="font-size:.8rem;color:rgba(255,255,255,.4);margin-bottom:28px">Regional Goiânia</div>
+
+        <input id="input-senha-home" type="password" placeholder="Senha de acesso"
+          style="width:100%;padding:14px 16px;border-radius:12px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-family:inherit;font-size:.95rem;box-sizing:border-box;outline:none;margin-bottom:8px;transition:border-color .2s"
+          onfocus="this.style.borderColor='rgba(249,168,37,.6)'"
+          onblur="this.style.borderColor='rgba(255,255,255,.15)'"
+          onkeydown="if(event.key==='Enter')verificarSenha()"/>
+        <div id="senha-erro" style="color:#FF8A80;font-size:.78rem;margin-bottom:12px;min-height:18px"></div>
+        <button onclick="verificarSenha()"
+          style="width:100%;padding:14px;border-radius:12px;border:none;background:#F9A825;color:#0D47A1;font-family:inherit;font-size:.95rem;font-weight:800;cursor:pointer;transition:all .15s;letter-spacing:.3px"
+          onmouseover="this.style.background='#FFB300'" onmouseout="this.style.background='#F9A825'">
+          Entrar →
+        </button>
+      </div>
     </div>
   </div>
 
