@@ -2055,3 +2055,8 @@ body {
   .btn-delegar            { min-height: 40px; }
   .dropdown-header        { min-height: 56px; }
 }
+
+/* ===== EFETIVIDADE ===== */
+@media (max-width: 768px) {
+  .ef-grid { grid-template-columns: 1fr !important; }
+}
