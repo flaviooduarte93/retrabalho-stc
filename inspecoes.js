@@ -281,6 +281,167 @@ function exportarCSV() {
 }
 
 // ============================================================
+// EFETIVIDADE
+// ============================================================
+async function calcularEfetividade() {
+  // Busca ocorrências recentes para detectar reincidência
+  const { data: recentes } = await db
+    .from('historico_recente')
+    .select('uc,dt_inicio,finalizado')
+    .eq('finalizado', true);
+
+  const recentesPorUC = {};
+  (recentes||[]).forEach(r => {
+    if (!recentesPorUC[r.uc]) recentesPorUC[r.uc] = [];
+    recentesPorUC[r.uc].push(r.dt_inicio);
+  });
+
+  const updates = [];
+  const hoje = new Date();
+
+  for (const i of _todos) {
+    let efManutencao = i.efetividade_manutencao;
+    let efInspecao   = i.efetividade_inspecao;
+    let reincidenciaEm = i.reincidencia_em;
+    let changed = false;
+
+    // Efetividade de manutenção (90 dias após acao_executada_em)
+    if (i.status === 'acao_necessaria' && i.acao_status === 'concluida' && i.acao_executada_em) {
+      const dtExec    = new Date(i.acao_executada_em);
+      const fim90     = new Date(dtExec.getTime() + 90*86400000);
+      const ocorrs    = (recentesPorUC[i.uc]||[]).map(d => new Date(d)).filter(d => d > dtExec);
+      const reincidiu = ocorrs.length > 0;
+
+      const novaEf = reincidiu ? 'inefetiva' : hoje > fim90 ? 'efetiva' : 'monitorando';
+      const novaReincidencia = reincidiu ? ocorrs.sort((a,b)=>a-b)[0].toISOString() : null;
+
+      if (novaEf !== efManutencao || novaReincidencia !== reincidenciaEm) {
+        efManutencao   = novaEf;
+        reincidenciaEm = novaReincidencia;
+        changed = true;
+      }
+    }
+
+    // Efetividade de inspeção (30 dias após inspecionado_em)
+    if (i.status === 'ok' && i.inspecionado_em) {
+      const dtInsp = new Date(i.inspecionado_em);
+      const fim30  = new Date(dtInsp.getTime() + 30*86400000);
+      const ocorrs = (recentesPorUC[i.uc]||[]).map(d => new Date(d)).filter(d => d > dtInsp);
+      const reincidiu = ocorrs.length > 0;
+
+      const novaEf = reincidiu ? 'inefetiva' : hoje > fim30 ? 'efetiva' : 'monitorando';
+      if (novaEf !== efInspecao) { efInspecao = novaEf; changed = true; }
+    }
+
+    if (changed) {
+      updates.push({ id: i.id, efetividade_manutencao: efManutencao, efetividade_inspecao: efInspecao, reincidencia_em: reincidenciaEm });
+      // Atualiza local
+      i.efetividade_manutencao = efManutencao;
+      i.efetividade_inspecao   = efInspecao;
+      i.reincidencia_em        = reincidenciaEm;
+    }
+  }
+
+  // Persiste atualizações no Supabase
+  for (const u of updates) {
+    await db.from('inspecoes').update({
+      efetividade_manutencao: u.efetividade_manutencao,
+      efetividade_inspecao:   u.efetividade_inspecao,
+      reincidencia_em:        u.reincidencia_em,
+    }).eq('id', u.id);
+  }
+}
+
+function renderEfetividade() {
+  const concluidas  = _todos.filter(i => i.status==='acao_necessaria' && i.acao_status==='concluida');
+  const inspecoesOk = _todos.filter(i => i.status==='ok' && i.inspecionado_em);
+
+  const efManut = {
+    efetiva:    concluidas.filter(i=>i.efetividade_manutencao==='efetiva').length,
+    inefetiva:  concluidas.filter(i=>i.efetividade_manutencao==='inefetiva').length,
+    monitorando:concluidas.filter(i=>i.efetividade_manutencao==='monitorando'||!i.efetividade_manutencao).length,
+  };
+  const efInsp = {
+    efetiva:    inspecoesOk.filter(i=>i.efetividade_inspecao==='efetiva').length,
+    inefetiva:  inspecoesOk.filter(i=>i.efetividade_inspecao==='inefetiva').length,
+    monitorando:inspecoesOk.filter(i=>i.efetividade_inspecao==='monitorando'||!i.efetividade_inspecao).length,
+  };
+
+  const pctManut = concluidas.length ? Math.round(efManut.efetiva/(concluidas.length-efManut.monitorando||1)*100) : null;
+  const pctInsp  = inspecoesOk.length ? Math.round(efInsp.efetiva/(inspecoesOk.length-efInsp.monitorando||1)*100) : null;
+
+  const inefetivas = _todos.filter(i => i.efetividade_manutencao==='inefetiva' || i.efetividade_inspecao==='inefetiva');
+
+  const el = document.getElementById('efetividade-container');
+  if (!el) return;
+
+  el.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px" class="ef-grid">
+
+      <!-- Efetividade manutenção -->
+      <div class="result-card" style="border-left:4px solid var(--eq-blue)">
+        <div class="gantt-title" style="margin-bottom:16px">🔧 Efetividade da Manutenção <span style="font-size:.72rem;color:var(--eq-gray-400);font-weight:400">(90 dias)</span></div>
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
+          <div style="flex:1">
+            <div style="height:10px;border-radius:99px;background:var(--eq-gray-100);overflow:hidden;display:flex">
+              <div style="width:${pctManut??0}%;background:var(--eq-green);transition:width .5s"></div>
+            </div>
+            <div style="font-size:.72rem;color:var(--eq-gray-500);margin-top:4px">${concluidas.length} serviços concluídos</div>
+          </div>
+          <div style="font-size:1.6rem;font-weight:800;color:${pctManut>=80?'var(--eq-green)':pctManut>=50?'var(--eq-amber-dark)':'var(--eq-red)'}">${pctManut!==null?pctManut+'%':'—'}</div>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <div style="text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--eq-green)">${efManut.efetiva}</div><div style="font-size:.68rem;color:var(--eq-gray-400)">Efetivas</div></div>
+          <div style="text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--eq-red)">${efManut.inefetiva}</div><div style="font-size:.68rem;color:var(--eq-gray-400)">Reincidências</div></div>
+          <div style="text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--eq-blue)">${efManut.monitorando}</div><div style="font-size:.68rem;color:var(--eq-gray-400)">Monitorando</div></div>
+        </div>
+      </div>
+
+      <!-- Efetividade inspeção -->
+      <div class="result-card" style="border-left:4px solid var(--eq-green)">
+        <div class="gantt-title" style="margin-bottom:16px">👁 Efetividade da Inspeção <span style="font-size:.72rem;color:var(--eq-gray-400);font-weight:400">(30 dias)</span></div>
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:14px">
+          <div style="flex:1">
+            <div style="height:10px;border-radius:99px;background:var(--eq-gray-100);overflow:hidden;display:flex">
+              <div style="width:${pctInsp??0}%;background:var(--eq-green);transition:width .5s"></div>
+            </div>
+            <div style="font-size:.72rem;color:var(--eq-gray-500);margin-top:4px">${inspecoesOk.length} inspeções OK</div>
+          </div>
+          <div style="font-size:1.6rem;font-weight:800;color:${pctInsp>=80?'var(--eq-green)':pctInsp>=50?'var(--eq-amber-dark)':'var(--eq-red)'}">${pctInsp!==null?pctInsp+'%':'—'}</div>
+        </div>
+        <div style="display:flex;gap:16px;flex-wrap:wrap">
+          <div style="text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--eq-green)">${efInsp.efetiva}</div><div style="font-size:.68rem;color:var(--eq-gray-400)">Efetivas</div></div>
+          <div style="text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--eq-red)">${efInsp.inefetiva}</div><div style="font-size:.68rem;color:var(--eq-gray-400)">Reincidências</div></div>
+          <div style="text-align:center"><div style="font-size:1.1rem;font-weight:800;color:var(--eq-blue)">${efInsp.monitorando}</div><div style="font-size:.68rem;color:var(--eq-gray-400)">Monitorando</div></div>
+        </div>
+      </div>
+    </div>
+
+    ${inefetivas.length ? `
+    <div class="result-card" style="margin-bottom:20px;border-left:4px solid var(--eq-red)">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <span style="font-size:1rem">❌</span>
+        <div class="gantt-title" style="margin-bottom:0;color:var(--eq-red)">Reincidências Detectadas (${inefetivas.length})</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${inefetivas.map(i => `
+          <div style="padding:10px 14px;background:var(--eq-red-light);border-radius:10px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+            <div>
+              <div style="font-weight:700;color:var(--eq-red)">UC ${i.uc}</div>
+              <div style="font-size:.75rem;color:var(--eq-gray-600)">
+                ${i.efetividade_manutencao==='inefetiva'?`🔧 Manutenção inefetiva (${ACOES_LABEL[i.acao]||'—'})`:''} 
+                ${i.efetividade_inspecao==='inefetiva'?'👁 Inspeção inefetiva':''}
+                · Fiscal: <strong>${i.fiscal}</strong>
+              </div>
+              ${i.reincidencia_em ? `<div style="font-size:.72rem;color:var(--eq-red)">Reincidência em: ${fmtDate(i.reincidencia_em)}</div>` : ''}
+            </div>
+            <a href="pesquisa.html?uc=${i.uc}" style="font-size:.75rem;font-weight:700;color:var(--eq-red);text-decoration:none">Ver histórico →</a>
+          </div>`).join('')}
+      </div>
+    </div>` : ''}`;
+}
+
+// ============================================================
 // CARREGAMENTO
 // ============================================================
 async function carregar() {
@@ -291,9 +452,11 @@ async function carregar() {
       return all;
     }
     _todos = await fetchAll(db.from('inspecoes').select('*').order('delegado_em',{ascending:false}));
+    await calcularEfetividade();
     renderKPIs(_todos);
     aplicarFiltros();
     renderAcoesPendentes();
+    renderEfetividade();
   } catch(err) {
     console.error(err);
   }
