@@ -130,16 +130,52 @@ async function salvarDelegacao() {
 // ============================================================
 function badgeInspecao(uc) {
   const i = _inspecoesMap[uc];
-  if (!i) return `<button class="btn-delegar" onclick="abrirModalDelegar('${uc}',${diasRestantes(_lista.find(h=>h.uc===uc)?.data_conc)??'null'},'${_lista.find(h=>h.uc===uc)?fmtDateShort(_lista.find(h=>h.uc===uc).fim90.toISOString()):''}')">👁 Delegar inspeção</button>`;
-  const cores = { pendente:'var(--eq-amber-dark)', ok:'var(--eq-green)', acao_necessaria:'var(--eq-red)' };
-  const icons = { pendente:'⏳', ok:'✅', acao_necessaria:'⚠' };
-  const labels= { pendente:'Inspeção pendente', ok:'Tudo OK', acao_necessaria:'Ação necessária' };
+  const h = _lista.find(x => x.uc === uc);
+  const dias    = diasRestantes(h?.data_conc) ?? 'null';
+  const saida   = h ? fmtDateShort(h.fim90.toISOString()) : '';
+  const btnDel  = `<button class="btn-delegar btn-delegar--small" onclick="abrirModalDelegar('${uc}',${dias},'${saida}')">✏ Atualizar</button>`;
+  const btnNovo = `<button class="btn-delegar" onclick="abrirModalDelegar('${uc}',${dias},'${saida}')">👁 Delegar inspeção</button>`;
+
+  if (!i) return btnNovo;
+
   const acaoLabel = ACOES.find(a => a.value === i.acao)?.label || '';
+
+  // Serviço concluído
+  if (i.status === 'acao_necessaria' && i.acao_status === 'concluida') {
+    const ef = i.efetividade_manutencao;
+    const efBadge = ef === 'efetiva'   ? `<span style="font-size:.68rem;font-weight:700;color:var(--eq-green);background:var(--eq-green-light);padding:1px 7px;border-radius:20px">✅ Manutenção efetiva</span>` :
+                   ef === 'inefetiva'  ? `<span style="font-size:.68rem;font-weight:700;color:var(--eq-red);background:var(--eq-red-light);padding:1px 7px;border-radius:20px">❌ Reinciência detectada</span>` :
+                   `<span style="font-size:.68rem;font-weight:700;color:var(--eq-blue);background:var(--eq-blue-pale);padding:1px 7px;border-radius:20px">🔍 Monitorando 90 dias</span>`;
+    return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
+      <span style="font-size:.72rem;font-weight:700;color:var(--eq-green)">🔧 Serviço concluído</span>
+      <span style="font-size:.7rem;color:var(--eq-gray-500)">${acaoLabel}</span>
+      <span style="font-size:.7rem;color:var(--eq-gray-400)">— ${i.fiscal}</span>
+      ${efBadge}
+      <a href="inspecoes.html" style="font-size:.68rem;color:var(--eq-blue);font-weight:600">Ver painel →</a>
+    </div>`;
+  }
+
+  const cores  = { pendente:'var(--eq-amber-dark)', ok:'var(--eq-green)', acao_necessaria:'var(--eq-red)' };
+  const icons  = { pendente:'⏳', ok:'✅', acao_necessaria:'⚠' };
+  const labels = { pendente:'Inspeção pendente', ok:'Tudo OK', acao_necessaria:'Ação necessária' };
+
+  // Inspeção OK — monitorar efetividade
+  if (i.status === 'ok') {
+    const ef = i.efetividade_inspecao;
+    const efBadge = ef === 'efetiva'   ? `<span style="font-size:.68rem;color:var(--eq-green)">✅ Efetiva</span>` :
+                   ef === 'inefetiva'  ? `<span style="font-size:.68rem;color:var(--eq-red)">❌ Reincidência</span>` :
+                   `<span style="font-size:.68rem;color:var(--eq-blue)">🔍 30 dias</span>`;
+    return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
+      <span style="font-size:.72rem;font-weight:700;color:var(--eq-green)">✅ Tudo OK — ${i.fiscal}</span>
+      ${efBadge} ${btnDel}
+    </div>`;
+  }
+
   return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
     <span style="font-size:.72rem;font-weight:700;color:${cores[i.status]}">${icons[i.status]} ${labels[i.status]}</span>
     ${i.acao ? `<span style="font-size:.7rem;color:var(--eq-gray-500)">${acaoLabel}</span>` : ''}
     <span style="font-size:.7rem;color:var(--eq-gray-400)">— ${i.fiscal}</span>
-    <button class="btn-delegar btn-delegar--small" onclick="abrirModalDelegar('${uc}',${diasRestantes(_lista.find(h=>h.uc===uc)?.data_conc)??'null'},'${_lista.find(h=>h.uc===uc)?fmtDateShort(_lista.find(h=>h.uc===uc).fim90.toISOString()):''}')">✏ Atualizar</button>
+    ${btnDel}
   </div>`;
 }
 
