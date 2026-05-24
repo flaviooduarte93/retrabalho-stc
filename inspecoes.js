@@ -22,6 +22,8 @@ function fmtDate(iso){ if(!iso)return'----'; return new Date(iso).toLocaleString
 function diasDesde(iso){ if(!iso)return null; return Math.floor((new Date()-new Date(iso))/86400000); }
 
 let _todos = [], _chartFiscal = null, _chartAcoes = null;
+let _paginaAtual = 1;
+const _POR_PAGINA = 15;
 
 // ============================================================
 // MODAL ATUALIZAR AÇÃO
@@ -111,10 +113,18 @@ function dadosFiltrados() {
 }
 
 function aplicarFiltros() {
+  _paginaAtual = 1; // reseta para página 1 ao filtrar
   const lista = dadosFiltrados();
   renderTabela(lista);
   renderGraficos(lista);
   renderAcoesPendentes();
+}
+
+function irPagina(p) {
+  _paginaAtual = p;
+  renderTabela(dadosFiltrados());
+  // Scroll suave para o topo da tabela
+  document.getElementById('tabela-inspecoes')?.closest('.result-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 function renderKPIs(todos) {
@@ -229,13 +239,48 @@ function renderAcoesPendentes() {
 }
 
 function renderTabela(lista) {
-  const tbody = document.getElementById('tabela-body');
+  const tbody    = document.getElementById('tabela-body');
+  const paginacaoEl = document.getElementById('paginacao-tabela');
+
   if (!lista.length) {
     tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--eq-gray-400)">Nenhuma inspeção encontrada.</td></tr>';
+    if (paginacaoEl) paginacaoEl.innerHTML = '';
     return;
   }
-  const sorted = [...lista].sort((a,b)=>new Date(b.delegado_em)-new Date(a.delegado_em));
-  tbody.innerHTML = sorted.map(i => {
+
+  const sorted     = [...lista].sort((a,b)=>new Date(b.delegado_em)-new Date(a.delegado_em));
+  const totalPags  = Math.ceil(sorted.length / _POR_PAGINA);
+  _paginaAtual     = Math.min(_paginaAtual, totalPags);
+  const inicio     = (_paginaAtual - 1) * _POR_PAGINA;
+  const pagina     = sorted.slice(inicio, inicio + _POR_PAGINA);
+
+  // Renderiza paginação
+  if (paginacaoEl) {
+    const btnCls = 'style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--eq-gray-200);background:#fff;font-family:inherit;font-size:.78rem;cursor:pointer;transition:all .15s"';
+    const btnAtivo = 'style="padding:6px 12px;border-radius:8px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer"';
+
+    // Calcula janela de páginas visíveis (max 5)
+    let pMin = Math.max(1, _paginaAtual - 2);
+    let pMax = Math.min(totalPags, pMin + 4);
+    pMin = Math.max(1, pMax - 4);
+
+    const btns = [];
+    btns.push(`<button ${_paginaAtual===1?'disabled style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--eq-gray-100);background:var(--eq-gray-50);font-family:inherit;font-size:.78rem;color:var(--eq-gray-300);cursor:default"':btnCls} onclick="irPagina(${_paginaAtual-1})">‹</button>`);
+    if (pMin > 1) btns.push(`<button ${btnCls} onclick="irPagina(1)">1</button><span style="font-size:.78rem;color:var(--eq-gray-400);padding:0 2px">…</span>`);
+    for (let p = pMin; p <= pMax; p++) {
+      btns.push(`<button ${p===_paginaAtual?btnAtivo:btnCls} onclick="irPagina(${p})">${p}</button>`);
+    }
+    if (pMax < totalPags) btns.push(`<span style="font-size:.78rem;color:var(--eq-gray-400);padding:0 2px">…</span><button ${btnCls} onclick="irPagina(${totalPags})">${totalPags}</button>`);
+    btns.push(`<button ${_paginaAtual===totalPags?'disabled style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--eq-gray-100);background:var(--eq-gray-50);font-family:inherit;font-size:.78rem;color:var(--eq-gray-300);cursor:default"':btnCls} onclick="irPagina(${_paginaAtual+1})">›</button>`);
+
+    paginacaoEl.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:12px">
+        <span style="font-size:.78rem;color:var(--eq-gray-400)">${inicio+1}–${Math.min(inicio+_POR_PAGINA, sorted.length)} de ${sorted.length} inspeções</span>
+        <div style="display:flex;gap:4px;align-items:center">${btns.join('')}</div>
+      </div>`;
+  }
+
+  tbody.innerHTML = pagina.map(i => {
     const st    = STATUS_LABEL[i.status]    || { label:i.status, cor:'var(--eq-gray-500)' };
     const acSt  = ACAO_ST_LABEL[i.acao_status] || { label:'—', cor:'var(--eq-gray-400)' };
     const btnAtualizar = i.status==='acao_necessaria'
@@ -284,17 +329,51 @@ function exportarCSV() {
 // EFETIVIDADE
 // ============================================================
 async function calcularEfetividade() {
-  // Busca ocorrências recentes para detectar reincidência
+  // Busca ocorrências de TODAS as fontes para detectar reincidência
+  // 1. Histórico recente (últimos 4 meses)
   const { data: recentes } = await db
     .from('historico_recente')
     .select('uc,dt_inicio,finalizado')
     .eq('finalizado', true);
 
+  // 2. Base histórica (todos os atendimentos do balde)
+  async function fetchAll(q) {
+    let all=[], page=0;
+    while(true){const{data}=await q.range(page*1000,page*1000+999);if(!data?.length)break;all=all.concat(data);if(data.length<1000)break;page++;}
+    return all;
+  }
+  const histBase = await fetchAll(
+    db.from('historico').select('uc,historico,data_origem')
+  );
+
+  // Monta mapa: uc → [datas de atendimento] combinando as duas fontes
   const recentesPorUC = {};
+
+  // Do histórico recente
   (recentes||[]).forEach(r => {
     if (!recentesPorUC[r.uc]) recentesPorUC[r.uc] = [];
-    recentesPorUC[r.uc].push(r.dt_inicio);
+    if (r.dt_inicio) recentesPorUC[r.uc].push(r.dt_inicio);
   });
+
+  // Da base histórica (array JSONB com atendimentos)
+  for (const h of histBase) {
+    const atends = Array.isArray(h.historico) ? h.historico : [];
+    for (const at of atends) {
+      const dt = at.data_origem || at.dataOrigem;
+      if (!dt) continue;
+      if (!recentesPorUC[h.uc]) recentesPorUC[h.uc] = [];
+      recentesPorUC[h.uc].push(dt);
+    }
+    // Também inclui data_origem direta da UC (último atendimento)
+    if (h.data_origem) {
+      if (!recentesPorUC[h.uc]) recentesPorUC[h.uc] = [];
+      recentesPorUC[h.uc].push(h.data_origem);
+    }
+    // Remove duplicatas
+    if (recentesPorUC[h.uc]) {
+      recentesPorUC[h.uc] = [...new Set(recentesPorUC[h.uc])];
+    }
+  }
 
   const updates = [];
   const hoje = new Date();
