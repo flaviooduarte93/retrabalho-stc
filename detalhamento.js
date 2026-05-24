@@ -545,7 +545,7 @@ async function carregar(){
         </div>
       </div>
       <div class="dropdown-list"></div>
-      <div id="paginacao-det"></div>\`;
+      <div id="paginacao-det"></div>`;
     aplicarFiltroOrdem();
   } catch(err){
     console.error(err);
