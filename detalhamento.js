@@ -120,8 +120,6 @@ async function salvarDelegacao() {
     }
 
     aplicarFiltroOrdem();
-    // Renderiza com o mês retornado diretamente — sem depender do DOM
-    if (mesGrafico) renderGraficoReincidencia(mesGrafico);
   } catch(err) {
     alert(`Erro ao salvar: ${err.message}`);
   } finally {
@@ -619,6 +617,7 @@ async function carregar(){
       <div class="dropdown-list"></div>
       <div id="paginacao-det"></div>`;
     aplicarFiltroOrdem();
+    if (mesGrafico) renderGraficoReincidencia(mesGrafico);
   } catch(err){
     console.error(err);
     document.getElementById('det-container').innerHTML=`<div class="no-results"><p>Erro: ${err.message}</p></div>`;
