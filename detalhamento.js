@@ -120,7 +120,9 @@ async function salvarDelegacao() {
     }
 
     aplicarFiltroOrdem();
-    renderGraficoReincidencia();
+    // Garante que o select tem valor antes de renderizar
+    const mesInicial = document.getElementById('filtro-mes-grafico')?.value;
+    if (mesInicial) renderGraficoReincidencia(mesInicial);
   } catch(err) {
     alert(`Erro ao salvar: ${err.message}`);
   } finally {
@@ -232,39 +234,71 @@ function popularFiltroMes() {
   }).join('');
 }
 
-function renderGraficoReincidencia() {
-  const mesSel = document.getElementById('filtro-mes-grafico')?.value;
+// Armazena dados por faixa para uso no click
+let _dadosFaixas = { '1-3d':[], '4-7d':[], '8-12d':[], '>12d':[] };
+
+function renderGraficoReincidencia(mesSel) {
+  // Usa valor do select se não receber parâmetro
+  if (!mesSel) mesSel = document.getElementById('filtro-mes-grafico')?.value;
   if (!mesSel || !_histTodos.length) return;
 
-  // Para cada UC, calcula dias entre data_conc do atendimento anterior e data_origem do retrabalho
-  const faixas = { '1-3d':0, '4-7d':0, '8-12d':0, '>12d':0 };
+  const faixas = { '1-3d':[], '4-7d':[], '8-12d':[], '>12d':[] };
+
+  // Normaliza causa para verificar procedência
+  function _norm(s) {
+    return String(s||'').toUpperCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Z0-9]+/g,' ').trim();
+  }
+  const IMP_KW = [['INSTALAC','APOS','MEDIC','DEFEITO','CLIENTE'],['ILUMINAC','PUBLICA'],
+    ['ENCONTRADO','NORMAL'],['ENCONTRADO','ENERGIA','CORTADA'],['ACESSO','IMPEDIDO'],
+    ['DISJUNTOR','DESARMADO'],['ENDERECO','NAO','LOCALIZADO'],['PORTEIRA','TRANCADA'],
+    ['REDE','TELEFON'],['DISJUNTOR','BT','CLIENTE','COM','DEFEITO'],['RAMAL','ENTRADA','DEFEITO','CLIENTE']];
+  function _isProcedente(causa) {
+    const c = _norm(causa);
+    if (!c || c==='----') return false;
+    if (IMP_KW.some(kws => kws.every(kw => c.includes(kw)))) return false;
+    return true;
+  }
 
   for (const h of _histTodos) {
     const atends = (h.historico||[])
-      .filter(a => (a.data_origem||a.dataOrigem))
+      .filter(a => a.data_origem||a.dataOrigem)
       .sort((a,b) => (a.data_origem||a.dataOrigem) > (b.data_origem||b.dataOrigem) ? 1 : -1);
 
     for (let i = 1; i < atends.length; i++) {
-      const cur     = atends[i];
-      const ant     = atends[i-1];
-      const dtCur   = cur.data_origem || cur.dataOrigem;
-      const dtAntConc = ant.data_conc || ant.dataConc;
+      const cur       = atends[i];
+      const ant       = atends[i-1];
+      const dtCur     = cur.data_origem || cur.dataOrigem;
+      const dtAntConc = ant.data_conc   || ant.dataConc;
       if (!dtCur || !dtAntConc) continue;
-
-      // Filtra pelo mês selecionado
       if (dtCur.slice(0,7) !== mesSel) continue;
+
+      // Só conta se o atendimento atual for procedente
+      if (!_isProcedente(cur.causa)) continue;
 
       const dias = Math.round((new Date(dtCur) - new Date(dtAntConc)) / 86400000);
       if (dias < 1) continue;
-      if      (dias <= 3)  faixas['1-3d']++;
-      else if (dias <= 7)  faixas['4-7d']++;
-      else if (dias <= 12) faixas['8-12d']++;
-      else                 faixas['>12d']++;
+
+      const registro = {
+        uc:       h.uc,
+        equipe:   cur.prefixo || '----',
+        dtFim:    cur.data_conc || cur.dataConc,
+        ocorrencia: cur.os     || '----',
+        causa:    cur.causa    || '----',
+        dias,
+      };
+
+      if      (dias <= 3)  faixas['1-3d'].push(registro);
+      else if (dias <= 7)  faixas['4-7d'].push(registro);
+      else if (dias <= 12) faixas['8-12d'].push(registro);
+      else                 faixas['>12d'].push(registro);
     }
   }
 
+  _dadosFaixas = faixas;
+
   const labels = ['1 a 3 dias','4 a 7 dias','8 a 12 dias','Mais de 12 dias'];
-  const valores = [faixas['1-3d'], faixas['4-7d'], faixas['8-12d'], faixas['>12d']];
+  const chaves = ['1-3d','4-7d','8-12d','>12d'];
+  const valores = chaves.map(k => faixas[k].length);
   const cores   = ['#C62828','#E53935','#F9A825','#1565C0'];
   const total   = valores.reduce((a,b)=>a+b,0);
 
@@ -282,18 +316,20 @@ function renderGraficoReincidencia() {
         backgroundColor: cores,
         borderRadius: 8,
         borderSkipped: false,
+        hoverBackgroundColor: cores.map(c => c + 'CC'),
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      cursor: 'pointer',
       plugins: {
         legend: { display: false },
         tooltip: {
           callbacks: {
             label: ctx => {
               const pct = total ? ((ctx.raw/total)*100).toFixed(1) : 0;
-              return ` ${ctx.raw} UCs (${pct}%)`;
+              return ` ${ctx.raw} UCs (${pct}%) — clique para ver detalhes`;
             }
           }
         }
@@ -301,9 +337,40 @@ function renderGraficoReincidencia() {
       scales: {
         x: { grid:{ display:false }, ticks:{ font:{ family:"'Plus Jakarta Sans',sans-serif", size:12 } } },
         y: { beginAtZero:true, ticks:{ stepSize:1, font:{ family:"'Plus Jakarta Sans',sans-serif", size:11 } }, grid:{ color:'rgba(0,0,0,.05)' } }
+      },
+      onClick(evt) {
+        const pts = _chartReincidencia.getElementsAtEventForMode(evt,'nearest',{intersect:true},true);
+        if (!pts.length) return;
+        const idx = pts[0].index;
+        abrirDetalhesFaixa(chaves[idx], labels[idx]);
       }
     }
   });
+}
+
+function abrirDetalhesFaixa(chave, label) {
+  const dados = _dadosFaixas[chave] || [];
+  const el    = document.getElementById('detalhe-faixa');
+  const titulo= document.getElementById('detalhe-faixa-titulo');
+  if (!el || !titulo) return;
+
+  titulo.textContent = `Reincidências — ${label} (${dados.length} UCs)`;
+
+  if (!dados.length) {
+    el.querySelector('tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--eq-gray-400)">Nenhuma UC nesta faixa.</td></tr>';
+  } else {
+    const sorted = [...dados].sort((a,b) => a.dias - b.dias);
+    el.querySelector('tbody').innerHTML = sorted.map(d => `<tr>
+      <td><a href="pesquisa.html?uc=${d.uc}" style="color:var(--eq-blue-dark);font-weight:700">${d.uc}</a></td>
+      <td>${d.equipe}</td>
+      <td style="font-size:.78rem">${d.dtFim ? new Date(d.dtFim).toLocaleDateString('pt-BR') : '----'}</td>
+      <td><strong>${d.ocorrencia}</strong></td>
+      <td style="max-width:200px;font-size:.78rem">${d.causa}</td>
+    </tr>`).join('');
+  }
+
+  el.style.display = 'block';
+  el.scrollIntoView({ behavior:'smooth', block:'start' });
 }
 
 function toggleDropdown(uid){const body=document.getElementById('body_'+uid),icon=document.getElementById('icon_'+uid),item=document.getElementById('item_'+uid);if(!body)return;const open=body.style.display!=='none';body.style.display=open?'none':'block';if(icon)icon.textContent=open?'▾':'▴';if(item)item.classList.toggle('dropdown-open',!open);}
