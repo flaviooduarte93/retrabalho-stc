@@ -11,6 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"/>
   <link rel="stylesheet" href="style.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body class="inner-page">
   <nav class="topbar">
@@ -29,6 +30,25 @@
     <h1 class="page-title">UCs em Retrabalho sem Ocorrência Ativa</h1>
     <p class="page-subtitle">UCs com histórico de retrabalho dentro do período de 90 dias que não possuem ocorrência ativa no momento.</p>
     <div id="stats-det"></div>
+
+    <!-- Gráfico de velocidade de reincidência -->
+    <div class="result-card" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+        <div>
+          <div class="gantt-title" style="margin-bottom:2px">Velocidade de Reincidência</div>
+          <div style="font-size:.75rem;color:var(--eq-gray-500)">Dias entre o atendimento anterior e o retorno ao retrabalho</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:.78rem;font-weight:600;color:var(--eq-gray-600)">Mês:</label>
+          <select id="filtro-mes-grafico" class="filtro-select" onchange="renderGraficoReincidencia()" style="font-size:.82rem;padding:7px 10px">
+          </select>
+        </div>
+      </div>
+      <div style="position:relative;height:260px">
+        <canvas id="chart-reincidencia"></canvas>
+      </div>
+    </div>
+
     <div id="det-container"></div>
   </main>
 
