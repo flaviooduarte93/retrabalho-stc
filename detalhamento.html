@@ -49,6 +49,28 @@
       </div>
     </div>
 
+    <!-- Tabela de detalhes ao clicar na barra -->
+    <div id="detalhe-faixa" style="display:none;margin-bottom:20px">
+      <div class="result-card" style="border-left:4px solid var(--eq-blue)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+          <div class="gantt-title" id="detalhe-faixa-titulo" style="margin-bottom:0"></div>
+          <button onclick="document.getElementById('detalhe-faixa').style.display='none'" style="padding:5px 14px;border-radius:8px;border:1.5px solid var(--eq-gray-200);background:#fff;font-family:inherit;font-size:.78rem;cursor:pointer;color:var(--eq-gray-600)">✕ Fechar</button>
+        </div>
+        <div class="historico-table-wrap">
+          <table class="historico-table">
+            <thead><tr>
+              <th>UC</th>
+              <th>Equipe</th>
+              <th>Data Finalização</th>
+              <th>Ocorrência</th>
+              <th>Causa</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
     <div id="det-container"></div>
   </main>
 
