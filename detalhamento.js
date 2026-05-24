@@ -120,9 +120,8 @@ async function salvarDelegacao() {
     }
 
     aplicarFiltroOrdem();
-    // Garante que o select tem valor antes de renderizar
-    const mesInicial = document.getElementById('filtro-mes-grafico')?.value;
-    if (mesInicial) renderGraficoReincidencia(mesInicial);
+    // Renderiza com o mês retornado diretamente — sem depender do DOM
+    if (mesGrafico) renderGraficoReincidencia(mesGrafico);
   } catch(err) {
     alert(`Erro ao salvar: ${err.message}`);
   } finally {
@@ -216,22 +215,28 @@ function alterarPorPagina(n) {
 // ============================================================
 function popularFiltroMes() {
   const sel = document.getElementById('filtro-mes-grafico');
-  if (!sel) return;
+  if (!sel) return null;
   const meses = new Set();
   for (const h of _histTodos) {
     for (const at of (h.historico||[])) {
-      const d = at.data_origem||at.dataOrigem;
-      if (d) meses.add(d.slice(0,7)); // YYYY-MM
+      const d = at.data_origem || at.dataOrigem;
+      if (d) meses.add(d.slice(0,7));
     }
   }
-  const sorted = [...meses].sort().reverse();
-  const hoje   = new Date();
+  const sorted   = [...meses].sort().reverse();
+  const hoje     = new Date();
   const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  // Usa mês atual se existir, senão o mais recente disponível
+  const mesDefault = sorted.includes(mesAtual) ? mesAtual : (sorted[0] || mesAtual);
+
   sel.innerHTML = sorted.map(m => {
     const [y,mo] = m.split('-');
     const label  = new Date(y, mo-1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
-    return `<option value="${m}" ${m===mesAtual?'selected':''}>${label.charAt(0).toUpperCase()+label.slice(1)}</option>`;
+    return `<option value="${m}" ${m===mesDefault?'selected':''}>${label.charAt(0).toUpperCase()+label.slice(1)}</option>`;
   }).join('');
+
+  sel.value = mesDefault; // força o valor selecionado
+  return mesDefault;      // retorna para uso imediato
 }
 
 // Armazena dados por faixa para uso no click
@@ -545,7 +550,7 @@ async function carregar(){
 
     const ucsComAlerta=new Set((ativas||[]).filter(o=>o.em_historico).map(o=>o.uc));
     _histTodos = hist||[]; // guarda para o gráfico
-    popularFiltroMes();
+    const mesGrafico = popularFiltroMes();
     const hoje=new Date();
     _lista=(hist||[]).filter(h=>{
       if(!h.data_conc)return false;
