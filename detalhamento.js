@@ -14,6 +14,8 @@ function diasRestantes(dc){if(!dc)return null;return Math.ceil((new Date(new Dat
 function calcPct90(dc){if(!dc)return 0;const ini=new Date(dc),fim=new Date(ini.getTime()+91*86400000),hoje=new Date();if(hoje>=fim)return 100;if(hoje<=ini)return 0;return Math.min(100,Math.round((hoje-ini)/(fim-ini)*100));}
 
 let _lista=[], _criterio='menor-tempo', _filtro='', _filtroCard='todos', _filtroInsp='todos';
+let _paginaAtual=1, _porPagina=20;
+let _histTodos=[], _chartReincidencia=null;
 let _inspecoesMap = {}; // uc → inspecao mais recente
 
 // ============================================================
@@ -118,6 +120,7 @@ async function salvarDelegacao() {
     }
 
     aplicarFiltroOrdem();
+    renderGraficoReincidencia();
   } catch(err) {
     alert(`Erro ao salvar: ${err.message}`);
   } finally {
@@ -183,12 +186,124 @@ function badgeInspecao(uc) {
 // RENDER DA LISTA
 // ============================================================
 function filtrarInsp(tipo) {
+  _paginaAtual = 1;
   _filtroInsp = _filtroInsp === tipo ? 'todos' : tipo;
   // Atualiza visual dos badges
   document.querySelectorAll('[data-filtro-insp]').forEach(el => {
     el.classList.toggle('insp-filtro--active', el.dataset.filtroInsp === _filtroInsp);
   });
   aplicarFiltroOrdem();
+}
+
+// ============================================================
+// PAGINAÇÃO
+// ============================================================
+function irPagina(p) {
+  _paginaAtual = p;
+  aplicarFiltroOrdem();
+  document.querySelector('.dropdown-list')?.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function alterarPorPagina(n) {
+  _porPagina   = parseInt(n);
+  _paginaAtual = 1;
+  aplicarFiltroOrdem();
+}
+
+// ============================================================
+// GRÁFICO DE REINCIDÊNCIA
+// ============================================================
+function popularFiltroMes() {
+  const sel = document.getElementById('filtro-mes-grafico');
+  if (!sel) return;
+  const meses = new Set();
+  for (const h of _histTodos) {
+    for (const at of (h.historico||[])) {
+      const d = at.data_origem||at.dataOrigem;
+      if (d) meses.add(d.slice(0,7)); // YYYY-MM
+    }
+  }
+  const sorted = [...meses].sort().reverse();
+  const hoje   = new Date();
+  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}`;
+  sel.innerHTML = sorted.map(m => {
+    const [y,mo] = m.split('-');
+    const label  = new Date(y, mo-1).toLocaleDateString('pt-BR',{month:'long',year:'numeric'});
+    return `<option value="${m}" ${m===mesAtual?'selected':''}>${label.charAt(0).toUpperCase()+label.slice(1)}</option>`;
+  }).join('');
+}
+
+function renderGraficoReincidencia() {
+  const mesSel = document.getElementById('filtro-mes-grafico')?.value;
+  if (!mesSel || !_histTodos.length) return;
+
+  // Para cada UC, calcula dias entre data_conc do atendimento anterior e data_origem do retrabalho
+  const faixas = { '1-3d':0, '4-7d':0, '8-12d':0, '>12d':0 };
+
+  for (const h of _histTodos) {
+    const atends = (h.historico||[])
+      .filter(a => (a.data_origem||a.dataOrigem))
+      .sort((a,b) => (a.data_origem||a.dataOrigem) > (b.data_origem||b.dataOrigem) ? 1 : -1);
+
+    for (let i = 1; i < atends.length; i++) {
+      const cur     = atends[i];
+      const ant     = atends[i-1];
+      const dtCur   = cur.data_origem || cur.dataOrigem;
+      const dtAntConc = ant.data_conc || ant.dataConc;
+      if (!dtCur || !dtAntConc) continue;
+
+      // Filtra pelo mês selecionado
+      if (dtCur.slice(0,7) !== mesSel) continue;
+
+      const dias = Math.round((new Date(dtCur) - new Date(dtAntConc)) / 86400000);
+      if (dias < 1) continue;
+      if      (dias <= 3)  faixas['1-3d']++;
+      else if (dias <= 7)  faixas['4-7d']++;
+      else if (dias <= 12) faixas['8-12d']++;
+      else                 faixas['>12d']++;
+    }
+  }
+
+  const labels = ['1 a 3 dias','4 a 7 dias','8 a 12 dias','Mais de 12 dias'];
+  const valores = [faixas['1-3d'], faixas['4-7d'], faixas['8-12d'], faixas['>12d']];
+  const cores   = ['#C62828','#E53935','#F9A825','#1565C0'];
+  const total   = valores.reduce((a,b)=>a+b,0);
+
+  if (_chartReincidencia) _chartReincidencia.destroy();
+  const ctx = document.getElementById('chart-reincidencia')?.getContext('2d');
+  if (!ctx) return;
+
+  _chartReincidencia = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'UCs em retrabalho',
+        data:  valores,
+        backgroundColor: cores,
+        borderRadius: 8,
+        borderSkipped: false,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => {
+              const pct = total ? ((ctx.raw/total)*100).toFixed(1) : 0;
+              return ` ${ctx.raw} UCs (${pct}%)`;
+            }
+          }
+        }
+      },
+      scales: {
+        x: { grid:{ display:false }, ticks:{ font:{ family:"'Plus Jakarta Sans',sans-serif", size:12 } } },
+        y: { beginAtZero:true, ticks:{ stepSize:1, font:{ family:"'Plus Jakarta Sans',sans-serif", size:11 } }, grid:{ color:'rgba(0,0,0,.05)' } }
+      }
+    }
+  });
 }
 
 function toggleDropdown(uid){const body=document.getElementById('body_'+uid),icon=document.getElementById('icon_'+uid),item=document.getElementById('item_'+uid);if(!body)return;const open=body.style.display!=='none';body.style.display=open?'none':'block';if(icon)icon.textContent=open?'▾':'▴';if(item)item.classList.toggle('dropdown-open',!open);}
@@ -252,21 +367,60 @@ function listaFiltrada(){
 }
 
 function aplicarFiltroOrdem(){
-  const lista=listaFiltrada();
+  const lista     = listaFiltrada();
+  const totalPags = Math.ceil(lista.length / _porPagina);
+  _paginaAtual    = Math.min(_paginaAtual, Math.max(1, totalPags));
+  const inicio    = (_paginaAtual - 1) * _porPagina;
+  const pagina    = lista.slice(inicio, inicio + _porPagina);
+
   const c=document.getElementById('filtro-count');
   if(c)c.textContent=lista.length+' UC'+(lista.length!==1?'s':'');
-  renderLista(lista);
+
+  renderLista(pagina);
+
+  // Paginação
+  const pelDiv = document.getElementById('paginacao-det');
+  if (!pelDiv) return;
+  if (totalPags <= 1) { pelDiv.innerHTML=''; return; }
+
+  const btnCls  = 'style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--eq-gray-200);background:#fff;font-family:inherit;font-size:.78rem;cursor:pointer"';
+  const btnAtivo= 'style="padding:6px 12px;border-radius:8px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer"';
+  const btnDis  = 'style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--eq-gray-100);background:var(--eq-gray-50);font-family:inherit;font-size:.78rem;color:var(--eq-gray-300);cursor:default"';
+
+  let pMin = Math.max(1, _paginaAtual-2);
+  let pMax = Math.min(totalPags, pMin+4);
+  pMin     = Math.max(1, pMax-4);
+
+  const btns = [];
+  btns.push(`<button ${_paginaAtual===1?btnDis:btnCls} onclick="irPagina(${_paginaAtual-1})">‹</button>`);
+  if (pMin>1) btns.push(`<button ${btnCls} onclick="irPagina(1)">1</button><span style="font-size:.78rem;color:var(--eq-gray-400);padding:0 2px">…</span>`);
+  for (let p=pMin; p<=pMax; p++) btns.push(`<button ${p===_paginaAtual?btnAtivo:btnCls} onclick="irPagina(${p})">${p}</button>`);
+  if (pMax<totalPags) btns.push(`<span style="font-size:.78rem;color:var(--eq-gray-400);padding:0 2px">…</span><button ${btnCls} onclick="irPagina(${totalPags})">${totalPags}</button>`);
+  btns.push(`<button ${_paginaAtual===totalPags?btnDis:btnCls} onclick="irPagina(${_paginaAtual+1})">›</button>`);
+
+  // Seletor de itens por página
+  const opcs = [10,20,50,100].map(n=>`<option value="${n}" ${n===_porPagina?'selected':''}>${n} por página</option>`).join('');
+
+  pelDiv.innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:14px;padding:0 4px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:.78rem;color:var(--eq-gray-400)">${inicio+1}–${Math.min(inicio+_porPagina,lista.length)} de ${lista.length} UCs</span>
+        <select onchange="alterarPorPagina(this.value)" style="padding:5px 8px;border-radius:8px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.75rem;cursor:pointer">${opcs}</select>
+      </div>
+      <div style="display:flex;gap:4px;align-items:center">${btns.join('')}</div>
+    </div>`;
 }
 
 function filtrarCard(tipo){
+  _paginaAtual=1;
   _filtroCard=_filtroCard===tipo?'todos':tipo;
   document.querySelectorAll('.stat-card[data-filtro]').forEach(el=>{el.classList.toggle('stat-card--active',el.dataset.filtro===_filtroCard);});
   aplicarFiltroOrdem();
 }
 
-function filtrarUC(v){_filtro=v;const c=document.getElementById('filtro-clear');if(c)c.style.display=v?'flex':'none';aplicarFiltroOrdem();}
-function limparFiltro(){_filtro='';const i=document.getElementById('filtro-uc');if(i)i.value='';const c=document.getElementById('filtro-clear');if(c)c.style.display='none';aplicarFiltroOrdem();}
-function ordenarLista(criterio){_criterio=criterio;document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('sort-btn--active'));document.getElementById('sort-'+criterio)?.classList.add('sort-btn--active');aplicarFiltroOrdem();}
+function filtrarUC(v){_paginaAtual=1;_filtro=v;const c=document.getElementById('filtro-clear');if(c)c.style.display=v?'flex':'none';aplicarFiltroOrdem();}
+function limparFiltro(){_paginaAtual=1;_filtro='';const i=document.getElementById('filtro-uc');if(i)i.value='';const c=document.getElementById('filtro-clear');if(c)c.style.display='none';aplicarFiltroOrdem();}
+function ordenarLista(criterio){_paginaAtual=1;_criterio=criterio;document.querySelectorAll('.sort-btn').forEach(b=>b.classList.remove('sort-btn--active'));document.getElementById('sort-'+criterio)?.classList.add('sort-btn--active');aplicarFiltroOrdem();}
 
 function exportarExcel(){
   const lista=listaFiltrada();
@@ -323,6 +477,8 @@ async function carregar(){
     }
 
     const ucsComAlerta=new Set((ativas||[]).filter(o=>o.em_historico).map(o=>o.uc));
+    _histTodos = hist||[]; // guarda para o gráfico
+    popularFiltroMes();
     const hoje=new Date();
     _lista=(hist||[]).filter(h=>{
       if(!h.data_conc)return false;
@@ -388,7 +544,8 @@ async function carregar(){
           <button class="sort-btn" onclick="exportarExcel()" style="background:var(--eq-green);color:white;border-color:var(--eq-green)">⬇ Exportar Excel</button>
         </div>
       </div>
-      <div class="dropdown-list"></div>`;
+      <div class="dropdown-list"></div>
+      <div id="paginacao-det"></div>\`;
     aplicarFiltroOrdem();
   } catch(err){
     console.error(err);
