@@ -14,7 +14,7 @@ function diasRestantes(dc){if(!dc)return null;return Math.ceil((new Date(new Dat
 function calcPct90(dc){if(!dc)return 0;const ini=new Date(dc),fim=new Date(ini.getTime()+91*86400000),hoje=new Date();if(hoje>=fim)return 100;if(hoje<=ini)return 0;return Math.min(100,Math.round((hoje-ini)/(fim-ini)*100));}
 
 let _lista=[], _criterio='menor-tempo', _filtro='', _filtroCard='todos', _filtroInsp='todos';
-let _paginaAtual=1, _porPagina=20, _filtroMunicipio='', _filtroAlimentador='';
+let _paginaAtual=1, _porPagina=20, _filtroMunicipio='';
 let _histTodos=[], _chartReincidencia=null;
 let _inspecoesMap = {}; // uc → inspecao mais recente
 
@@ -184,12 +184,6 @@ function badgeInspecao(uc) {
 // ============================================================
 // RENDER DA LISTA
 // ============================================================
-function filtrarAlimentador(v) {
-  _paginaAtual = 1;
-  _filtroAlimentador = v;
-  aplicarFiltroOrdem();
-}
-
 function filtrarMunicipio(v) {
   _paginaAtual = 1;
   _filtroMunicipio = v;
@@ -406,7 +400,7 @@ function renderLista(lista){
       <div class="dropdown-header" onclick="toggleDropdown('${uid}')">
         <div class="dropdown-header-left">
           <div class="dropdown-uc">UC ${h.uc}</div>
-          <div class="dropdown-meta">${h.municipio?`<span style='font-size:.68rem;color:var(--eq-gray-400);font-weight:600'>${h.municipio}</span> · `:''} ${h.alimentador?`<span style='font-size:.68rem;color:var(--eq-blue);font-weight:600'>${h.alimentador}</span> · `:''} ${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
+          <div class="dropdown-meta">${h.municipio?`<span style='font-size:.68rem;color:var(--eq-gray-400);font-weight:600'>${h.municipio}</span> · `:''} ${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
           ${badgeInspecao(h.uc)}
         </div>
         <div class="dropdown-header-right">
@@ -437,7 +431,6 @@ function listaFiltrada(){
   else if(_filtroCard==='ok') lista=lista.filter(h=>diasRestantes(h.data_conc)>30);
   if(_filtro.trim()) lista=lista.filter(h=>h.uc.toLowerCase().includes(_filtro.trim().toLowerCase()));
   if(_filtroMunicipio) lista=lista.filter(h=>h.municipio===_filtroMunicipio);
-  if(_filtroAlimentador) lista=lista.filter(h=>h.alimentador===_filtroAlimentador);
   // Filtro por status de inspeção
   if(_filtroInsp === 'delegadas') lista=lista.filter(h=>!!_inspecoesMap[h.uc]);
   else if(_filtroInsp === 'ok')              lista=lista.filter(h=>_inspecoesMap[h.uc]?.status==='ok');

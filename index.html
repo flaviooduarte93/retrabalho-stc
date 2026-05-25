@@ -1,77 +1,79 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="theme-color" content="#0D47A1"/>
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Sistema de Retrabalho — Equatorial</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"/>
-  <link rel="stylesheet" href="style.css"/>
+<meta charset="UTF-8"/>
+<meta name="theme-color" content="#0D47A1"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Sistema de Retrabalho — Equatorial</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"/>
+<link rel="stylesheet" href="style.css"/>
 </head>
 <body class="home-page">
 
-  <!-- ===== TELA DE SENHA ===== -->
-  <div id="senha-overlay" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;padding:24px">
-    <!-- Mesmo fundo do painel principal -->
-    <div class="bg-grid" style="position:absolute;inset:0;z-index:0"></div>
-    <div class="bg-orb orb-1" style="position:absolute;z-index:0"></div>
-    <div class="bg-orb orb-2" style="position:absolute;z-index:0"></div>
+<!-- ===== TELA DE SENHA ===== -->
+<div id="senha-overlay" style="display:none;position:fixed;inset:0;z-index:9999;align-items:center;justify-content:center;padding:24px">
+  <div class="bg-grid" style="position:absolute;inset:0;z-index:0"></div>
+  <div class="bg-orb orb-1" style="position:absolute;z-index:0"></div>
+  <div class="bg-orb orb-2" style="position:absolute;z-index:0"></div>
 
-    <div style="position:relative;z-index:1;width:100%;max-width:400px">
-      <!-- Logo oficial Equatorial -->
-      <div style="display:flex;justify-content:center;margin-bottom:28px">
-        <img src="https://logospng.org/download/equatorial-energia/logo-equatorial-energia-1536.png"
-          alt="Equatorial Energia"
-          style="height:56px;object-fit:contain;filter:brightness(0) invert(1)"
-          onerror="this.style.display='none'"/>
-      </div>
+  <div style="position:relative;z-index:1;width:100%;max-width:420px">
+    <!-- LOGO MAIOR -->
+    <div style="display:flex;justify-content:center;margin-bottom:24px">
+      <img src="https://logospng.org/download/equatorial-energia/logo-equatorial-energia-1536.png"
+           alt="Equatorial Energia"
+           style="height:90px;object-fit:contain;filter:brightness(0) invert(1);drop-shadow(0 2px 8px rgba(0,0,0,.3))"
+           onerror="this.style.display='none'"/>
+    </div>
 
-      <!-- Card de login -->
-      <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:36px 32px;text-align:center;backdrop-filter:blur(20px)">
-        <div style="font-size:.75rem;font-weight:600;color:rgba(255,255,255,.4);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px">Sistema de Gestão de</div>
-        <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.6rem;font-weight:800;color:#fff;margin-bottom:4px">Retrabalho</div>
-        <div id="login-regional-label" style="font-size:.8rem;color:rgba(255,255,255,.4);margin-bottom:28px">Regional Goiânia</div>
+    <!-- Card de login -->
+    <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:36px 32px;text-align:center;backdrop-filter:blur(20px)">
+      <div style="font-size:.75rem;font-weight:600;color:rgba(255,255,255,.4);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px">Sistema de Gestão de</div>
+      <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.6rem;font-weight:800;color:#fff;margin-bottom:4px">Retrabalho</div>
+      <div id="login-regional-label" style="font-size:.8rem;color:rgba(255,255,255,.4);margin-bottom:28px">Regional Goiânia</div>
 
-        <!-- Seletor de regional -->
-        <div style="display:flex;gap:8px;margin-bottom:16px">
-          <button id="btn-gyn" onclick="selecionarRegional('goiania')"
-            style="flex:1;padding:10px;border-radius:10px;border:2px solid #1565C0;background:#1565C0;color:#fff;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .15s">
-            📍 Goiânia
-          </button>
-          <button id="btn-met" onclick="selecionarRegional('metropolitana')"
-            style="flex:1;padding:10px;border-radius:10px;border:2px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.6);font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .15s">
-            📍 Metropolitana
-          </button>
-        </div>
-
-        <div style="position:relative;margin-bottom:8px">
-          <input id="input-senha-home" type="password" placeholder="Senha de acesso"
-            style="width:100%;padding:14px 48px 14px 16px;border-radius:12px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-family:inherit;font-size:.95rem;box-sizing:border-box;outline:none;transition:border-color .2s"
-            onfocus="this.style.borderColor='rgba(249,168,37,.6)'"
-            onblur="this.style.borderColor='rgba(255,255,255,.15)'"
-            onkeydown="if(event.key==='Enter')verificarSenha()"/>
-          <button type="button" onclick="toggleSenhaVisivel()"
-            style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:rgba(255,255,255,.5);font-size:1rem;line-height:1;transition:color .15s"
-            onmouseover="this.style.color='rgba(255,255,255,.9)'"
-            onmouseout="this.style.color='rgba(255,255,255,.5)'"
-            title="Mostrar/ocultar senha"
-            id="btn-toggle-senha">👁</button>
-        </div>
-        <div id="senha-erro" style="color:#FF8A80;font-size:.78rem;margin-bottom:12px;min-height:18px"></div>
-        <button onclick="verificarSenha()"
-          style="width:100%;padding:14px;border-radius:12px;border:none;background:#F9A825;color:#fff;font-family:inherit;font-size:.95rem;font-weight:800;cursor:pointer;transition:all .15s;letter-spacing:.3px"
-          onmouseover="this.style.background='#FFB300'" onmouseout="this.style.background='#F9A825'">
-          Entrar →
+      <!-- Seletor de regional -->
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button id="btn-gyn" onclick="selecionarRegional('goiania')"
+          style="flex:1;padding:10px;border-radius:10px;border:2px solid #1565C0;background:#1565C0;color:#fff;font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .15s">
+          📍 Goiânia
+        </button>
+        <button id="btn-met" onclick="selecionarRegional('metropolitana')"
+          style="flex:1;padding:10px;border-radius:10px;border:2px solid rgba(255,255,255,.2);background:transparent;color:rgba(255,255,255,.6);font-family:inherit;font-size:.82rem;font-weight:700;cursor:pointer;transition:all .15s">
+          📍 Metropolitana
         </button>
       </div>
+
+      <div style="position:relative;margin-bottom:8px">
+        <input id="input-senha-home" type="password" placeholder="Senha de acesso"
+          style="width:100%;padding:14px 48px 14px 16px;border-radius:12px;border:1.5px solid rgba(255,255,255,.15);background:rgba(255,255,255,.07);color:#fff;font-family:inherit;font-size:.95rem;box-sizing:border-box;outline:none;transition:border-color .2s"
+          onfocus="this.style.borderColor='rgba(249,168,37,.6)'"
+          onblur="this.style.borderColor='rgba(255,255,255,.15)'"
+          onkeydown="if(event.key==='Enter')verificarSenha()"/>
+        <button type="button" onclick="toggleSenhaVisivel()"
+          style="position:absolute;right:14px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;padding:4px;color:rgba(255,255,255,.5);font-size:1rem;line-height:1;transition:color .15s"
+          onmouseover="this.style.color='rgba(255,255,255,.9)'"
+          onmouseout="this.style.color='rgba(255,255,255,.5)'"
+          title="Mostrar/ocultar senha"
+          id="btn-toggle-senha">👁</button>
+      </div>
+
+      <div id="senha-erro" style="color:#FF8A80;font-size:.78rem;margin-bottom:12px;min-height:18px"></div>
+
+      <button onclick="verificarSenha()"
+        style="width:100%;padding:14px;border-radius:12px;border:none;background:#F9A825;color:#fff;font-family:inherit;font-size:.95rem;font-weight:800;cursor:pointer;transition:all .15s;letter-spacing:.3px"
+        onmouseover="this.style.background='#FFB300'" onmouseout="this.style.background='#F9A825'">
+        Entrar →
+      </button>
     </div>
   </div>
+</div>
 
-  <div id="conteudo-home" style="display:none;width:100%">
+<!-- ===== HOME (após login) ===== -->
+<div id="conteudo-home" style="display:none;width:100%">
   <div class="bg-grid"></div>
   <div class="bg-orb orb-1"></div>
   <div class="bg-orb orb-2"></div>
@@ -93,9 +95,16 @@
         <h1 class="brand-title">equatorial</h1>
         <p class="system-subtitle">Sistema de Gestão de Retrabalho</p>
       </div>
+      <!-- BOTÃO SAIR — apenas na home -->
+      <button onclick="fazerLogout()"
+        style="margin-left:auto;padding:8px 20px;border-radius:20px;border:1.5px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);color:#fff;font-family:inherit;font-size:.8rem;font-weight:700;cursor:pointer;transition:all .15s;backdrop-filter:blur(4px);align-self:flex-start;margin-top:4px"
+        onmouseover="this.style.background='rgba(255,255,255,.22)'"
+        onmouseout="this.style.background='rgba(255,255,255,.1)'">
+        Sair ↩
+      </button>
     </header>
 
-    <!-- 3 BOTÕES DE NAVEGAÇÃO -->
+    <!-- CARDS DE NAVEGAÇÃO -->
     <section class="nav-cards nav-cards--four">
       <a href="pesquisa.html" class="nav-card card-blue">
         <div class="card-icon">
@@ -195,7 +204,6 @@
         Atualizar Bases de Dados
       </h3>
       <div class="upload-grid" style="grid-template-columns:1fr 1fr 1fr">
-
         <div class="upload-card">
           <label class="upload-label">
             <svg width="26" height="26" viewBox="0 0 26 26" fill="none">
@@ -237,11 +245,10 @@
           </label>
           <div class="upload-status" id="status-recente"></div>
         </div>
-
       </div>
     </section>
 
-    <!-- PAINEL DE STATUS DAS BASES -->
+    <!-- STATUS DAS BASES -->
     <section class="bases-status" id="bases-status">
       <div class="bases-status-title">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="flex-shrink:0">
@@ -260,8 +267,6 @@
     </footer>
   </main>
 
-
-  
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <script src="regional-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -270,77 +275,83 @@
   <script src="upload.js"></script>
   <script src="upload-recente.js"></script>
   <script src="home.js"></script>
-  </div><!-- /conteudo-home -->
+</div><!-- /conteudo-home -->
 
-  <script>
-    const SENHAS = {
-      goiania:       'eqtlstcgyn26',
-      metropolitana: 'eqtlstcmetro26',
-    };
+<script>
+const SENHAS = {
+  goiania: 'eqtlstcgyn26',
+  metropolitana: 'eqtlstcmetro26',
+};
+let _regionalSelecionada = sessionStorage.getItem('regional') || 'goiania';
 
-    let _regionalSelecionada = sessionStorage.getItem('regional') || 'goiania';
+function selecionarRegional(key) {
+  _regionalSelecionada = key;
+  sessionStorage.setItem('regional', key);
+  const isGyn = key === 'goiania';
+  const btnGyn = document.getElementById('btn-gyn');
+  const btnMet = document.getElementById('btn-met');
+  btnGyn.style.background   = isGyn ? '#1565C0' : 'transparent';
+  btnGyn.style.borderColor  = isGyn ? '#1565C0' : 'rgba(255,255,255,.2)';
+  btnGyn.style.color        = isGyn ? '#fff' : 'rgba(255,255,255,.6)';
+  btnMet.style.background   = !isGyn ? '#6A1B9A' : 'transparent';
+  btnMet.style.borderColor  = !isGyn ? '#6A1B9A' : 'rgba(255,255,255,.2)';
+  btnMet.style.color        = !isGyn ? '#fff' : 'rgba(255,255,255,.6)';
+  const label = document.getElementById('login-regional-label');
+  if (label) label.textContent = isGyn ? 'Regional Goiânia' : 'Regional Metropolitana';
+}
 
-    function selecionarRegional(key) {
-      _regionalSelecionada = key;
-      sessionStorage.setItem('regional', key);
-      const isGyn = key === 'goiania';
-      const btnGyn = document.getElementById('btn-gyn');
-      const btnMet = document.getElementById('btn-met');
-      btnGyn.style.background  = isGyn ? '#1565C0' : 'transparent';
-      btnGyn.style.borderColor = isGyn ? '#1565C0' : 'rgba(255,255,255,.2)';
-      btnGyn.style.color       = isGyn ? '#fff' : 'rgba(255,255,255,.6)';
-      btnMet.style.background  = !isGyn ? '#6A1B9A' : 'transparent';
-      btnMet.style.borderColor = !isGyn ? '#6A1B9A' : 'rgba(255,255,255,.2)';
-      btnMet.style.color       = !isGyn ? '#fff' : 'rgba(255,255,255,.6)';
-      // Título dinâmico
-      const label = document.getElementById('login-regional-label');
-      if (label) label.textContent = isGyn ? 'Regional Goiânia' : 'Regional Metropolitana';
-    }
+function toggleSenhaVisivel() {
+  const input = document.getElementById('input-senha-home');
+  const btn   = document.getElementById('btn-toggle-senha');
+  const visivel = input.type === 'text';
+  input.type  = visivel ? 'password' : 'text';
+  btn.textContent = visivel ? '👁' : '🙈';
+  btn.title   = visivel ? 'Mostrar senha' : 'Ocultar senha';
+}
 
-    function toggleSenhaVisivel() {
-      const input = document.getElementById('input-senha-home');
-      const btn   = document.getElementById('btn-toggle-senha');
-      const visivel = input.type === 'text';
-      input.type  = visivel ? 'password' : 'text';
-      btn.textContent = visivel ? '👁' : '🙈';
-      btn.title   = visivel ? 'Mostrar senha' : 'Ocultar senha';
-    }
+function verificarSenha() {
+  const val          = document.getElementById('input-senha-home').value;
+  const senhaCorreta = SENHAS[_regionalSelecionada] || SENHAS.goiania;
+  if (val === senhaCorreta) {
+    sessionStorage.setItem('auth_home', '1');
+    sessionStorage.setItem('regional', _regionalSelecionada);
+    document.getElementById('senha-overlay').style.display  = 'none';
+    document.getElementById('conteudo-home').style.display  = 'block';
+    document.getElementById('input-senha-home').value = '';
+    document.getElementById('senha-erro').textContent = '';
+    atualizarTemaRegional();
+  } else {
+    document.getElementById('senha-erro').textContent = 'Senha incorreta. Tente novamente.';
+    document.getElementById('input-senha-home').value = '';
+    document.getElementById('input-senha-home').focus();
+  }
+}
 
-    function verificarSenha() {
-      const val        = document.getElementById('input-senha-home').value;
-      const senhaCorreta = SENHAS[_regionalSelecionada] || SENHAS.goiania;
-      if (val === senhaCorreta) {
-        sessionStorage.setItem('auth_home', '1');
-        sessionStorage.setItem('regional', _regionalSelecionada);
-        document.getElementById('senha-overlay').style.display  = 'none';
-        document.getElementById('conteudo-home').style.display  = 'block';
-        document.getElementById('input-senha-home').value = '';
-        document.getElementById('senha-erro').textContent = '';
-        atualizarTemaRegional();
-      } else {
-        document.getElementById('senha-erro').textContent = 'Senha incorreta. Tente novamente.';
-        document.getElementById('input-senha-home').value = '';
-        document.getElementById('input-senha-home').focus();
-      }
-    }
+function atualizarTemaRegional() {
+  const reg   = sessionStorage.getItem('regional') || 'goiania';
+  const badge = document.querySelector('.topbar-badge');
+  if (badge) badge.textContent = reg === 'metropolitana' ? 'Metropolitana' : 'Goiânia';
+}
 
-    function atualizarTemaRegional() {
-      const reg = sessionStorage.getItem('regional') || 'goiania';
-      // Atualiza badge da topbar
-      const badge = document.querySelector('.topbar-badge');
-      if (badge) badge.textContent = reg === 'metropolitana' ? 'Metropolitana' : 'Goiânia';
-    }
+function fazerLogout() {
+  sessionStorage.removeItem('auth_home');
+  document.getElementById('conteudo-home').style.display = 'none';
+  document.getElementById('senha-overlay').style.display = 'flex';
+  setTimeout(() => {
+    document.getElementById('input-senha-home').focus();
+    selecionarRegional(_regionalSelecionada);
+  }, 100);
+}
 
-    // Verifica se já autenticou nesta sessão
-    if (sessionStorage.getItem('auth_home') === '1') {
-      document.getElementById('senha-overlay').style.display  = 'none';
-      document.getElementById('conteudo-home').style.display  = 'block';
-      atualizarTemaRegional();
-    } else {
-      document.getElementById('senha-overlay').style.display  = 'flex';
-      document.getElementById('conteudo-home').style.display  = 'none';
-      setTimeout(() => { document.getElementById('input-senha-home').focus(); selecionarRegional(_regionalSelecionada); }, 100);
-    }
-  </script>
+if (sessionStorage.getItem('auth_home') === '1') {
+  document.getElementById('senha-overlay').style.display  = 'none';
+  document.getElementById('conteudo-home').style.display  = 'block';
+  atualizarTemaRegional();
+} else {
+  document.getElementById('senha-overlay').style.display  = 'flex';
+  document.getElementById('conteudo-home').style.display  = 'none';
+  setTimeout(() => { document.getElementById('input-senha-home').focus(); selecionarRegional(_regionalSelecionada); }, 100);
+}
+</script>
 </body>
 </html>

@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body class="inner-page">
+
   <nav class="topbar">
     <div class="topbar-brand">
       <span class="brand-title">eq<span>ua</span>torial</span>
@@ -20,7 +21,6 @@
       <span class="topbar-navsep">›</span>
       <span class="topbar-navitem topbar-navitem--current">Call-Back</span>
     </div>
-    <button onclick="sair()" style="margin-left:auto;padding:6px 18px;border-radius:20px;border:1.5px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .15s;backdrop-filter:blur(4px)" onmouseover="this.style.background='rgba(255,255,255,.22)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">Sair ↩</button>
   </nav>
 
   <main class="page-main">
@@ -63,11 +63,5 @@
   <script src="causas-improcedentes.js"></script>
   <script src="callback.js"></script>
   <script src="regional-init.js"></script>
-  <script>
-    function sair() {
-      sessionStorage.removeItem('auth_home');
-      window.location.href = 'index.html';
-    }
-  </script>
 </body>
 </html>

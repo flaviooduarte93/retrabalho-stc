@@ -1,69 +1,61 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="theme-color" content="#0D47A1"/>
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Alertas de Campo — Equatorial Retrabalho</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"/>
-  <link rel="stylesheet" href="style.css"/>
+<meta charset="UTF-8"/>
+<meta name="theme-color" content="#0D47A1"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Alertas de Campo — Equatorial Retrabalho</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"/>
+<link rel="stylesheet" href="style.css"/>
 </head>
 <body class="inner-page">
 
-  <nav class="topbar">
-    <div class="topbar-brand">
-      <span class="brand-title">eq<span>ua</span>torial</span>
-      <span class="topbar-badge" id="regional-badge">Retrabalho</span>
-    </div>
-    <div class="topbar-nav">
-      <a href="index.html" class="topbar-navitem">Início</a>
-      <span class="topbar-navsep">›</span>
-      <span class="topbar-navitem topbar-navitem--current">Alertas</span>
-    </div>
-    <button onclick="sair()" style="margin-left:auto;padding:6px 18px;border-radius:20px;border:1.5px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .15s;backdrop-filter:blur(4px)" onmouseover="this.style.background='rgba(255,255,255,.22)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">Sair ↩</button>
-  </nav>
+<nav class="topbar">
+  <div class="topbar-brand">
+    <span class="brand-title">eq<span>ua</span>torial</span>
+    <span class="topbar-badge" id="regional-badge">Retrabalho</span>
+  </div>
+  <div class="topbar-nav">
+    <a href="index.html" class="topbar-navitem">Início</a>
+    <span class="topbar-navsep">›</span>
+    <span class="topbar-navitem topbar-navitem--current">Alertas</span>
+  </div>
+</nav>
 
-  <main class="page-main">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:4px">
-      <h1 class="page-title" style="margin-bottom:0">Alertas de Campo</h1>
-      <button class="search-btn" id="btn-refresh" style="padding:10px 20px;font-size:0.85rem">↻ Atualizar</button>
-    </div>
-    <p class="page-subtitle">Ocorrências ativas classificadas por risco de retrabalho.</p>
+<main class="page-main">
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:4px">
+    <h1 class="page-title" style="margin-bottom:0">Alertas de Campo</h1>
+    <button class="search-btn" id="btn-refresh" style="padding:10px 20px;font-size:0.85rem">↻ Atualizar</button>
+  </div>
+  <p class="page-subtitle">Ocorrências ativas classificadas por risco de retrabalho.</p>
 
-    <div id="stats-container"></div>
+  <div id="stats-container"></div>
 
-    <!-- Seletor de visão -->
-    <div class="visao-selector">
-      <button id="visao-retrabalho" class="visao-btn visao-btn--active visao-btn--danger" onclick="mudarVisao('retrabalho')">
-        🔴 Retrabalho Confirmado
-      </button>
-      <button id="visao-possivel" class="visao-btn visao-btn--warning" onclick="mudarVisao('possivel')">
-        ⚠ Possível Retrabalho
-      </button>
-      <button id="visao-primeiro" class="visao-btn visao-btn--success" onclick="mudarVisao('primeiro')">
-        🟢 Primeiro Atendimento
-      </button>
-    </div>
+  <div class="visao-selector">
+    <button id="visao-retrabalho" class="visao-btn visao-btn--active visao-btn--danger" onclick="mudarVisao('retrabalho')">
+      🔴 Retrabalho Confirmado
+    </button>
+    <button id="visao-possivel" class="visao-btn visao-btn--warning" onclick="mudarVisao('possivel')">
+      ⚠ Possível Retrabalho
+    </button>
+    <button id="visao-primeiro" class="visao-btn visao-btn--success" onclick="mudarVisao('primeiro')">
+      🟢 Primeiro Atendimento
+    </button>
+  </div>
 
-    <div id="alertas-container"></div>
-    <div id="historico-container"></div>
-  </main>
+  <div id="alertas-container"></div>
+  <div id="historico-container"></div>
+</main>
 
-  <script src="regional-config.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-init.js"></script>
-  <script src="causas-improcedentes.js"></script>
-  <script src="alertas.js"></script>
-  <script src="regional-init.js"></script>
-  <script>
-    function sair() {
-      sessionStorage.removeItem('auth_home');
-      window.location.href = 'index.html';
-    }
-  </script>
+<script src="regional-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-init.js"></script>
+<script src="causas-improcedentes.js"></script>
+<script src="alertas.js"></script>
+<script src="regional-init.js"></script>
 </body>
 </html>

@@ -21,9 +21,9 @@ async function rastrearAlimentador(docs, mesAno, alimentadorMap = {}) {
   for (const d of docs) {
     const novoAlim = alimentadorMap[d.uc] || null;
     if (!novoAlim) continue;
-    const atual           = mapAtual[d.uc];
+    const atual            = mapAtual[d.uc];
     const alimentadorAtual = atual?.alimentador;
-    const log             = Array.isArray(atual?.alimentador_log) ? atual.alimentador_log : [];
+    const log              = Array.isArray(atual?.alimentador_log) ? atual.alimentador_log : [];
     if (!alimentadorAtual || alimentadorAtual !== novoAlim) {
       if (alimentadorAtual && alimentadorAtual !== novoAlim) {
         log.push({ de: alimentadorAtual, para: novoAlim, mes_ano: mesAno, em: agora });
@@ -37,11 +37,10 @@ async function rastrearAlimentador(docs, mesAno, alimentadorMap = {}) {
   if (updates.length) console.log(`Alimentador: ${updates.length} UCs atualizadas`);
 }
 
-
-
 function mesAnoKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
 }
+
 function setStatusRecente(msg, type, pct = null) {
   const el = document.getElementById('status-recente');
   if (!el) return;
@@ -61,6 +60,7 @@ function setStatusRecente(msg, type, pct = null) {
   el.innerHTML = `<span>${msg}</span>${progressHtml}`;
   el.className = 'upload-status '+(type||'');
 }
+
 const ESTADOS_ATIVOS = ['PREPARAÇÃO','TRABALHANDO','DESLOCAMENTO','MULTIPLA'];
 
 async function limparMesesAntigos() {
@@ -82,16 +82,17 @@ async function limparMesesAntigos() {
 async function processarPlanilhaRecente(file, idx, total) {
   setStatusRecente(`⏳ Lendo arquivo ${idx+1}/${total}...`, 'loading');
   const data = await file.arrayBuffer();
-  const wb = XLSX.read(data);
+  const wb   = XLSX.read(data);
   const allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:'' });
 
+  // Localiza cabeçalho
   let headerIdx = -1;
   for (let i = 0; i < Math.min(5, allRows.length); i++) {
     if (allRows[i].some(c => String(c).trim() === 'Número')) { headerIdx = i; break; }
   }
   if (headerIdx === -1) throw new Error(`${file.name}: cabeçalho não encontrado`);
 
-  const headers = allRows[headerIdx].map(h => String(h).trim());
+  const headers  = allRows[headerIdx].map(h => String(h).trim());
   const dataRows = allRows.slice(headerIdx+1)
     .filter(r => r.some(c => c !== ''))
     .map(r => { const o={}; headers.forEach((h,i)=>{ o[h]=r[i]??''; }); return o; })
@@ -99,7 +100,7 @@ async function processarPlanilhaRecente(file, idx, total) {
 
   if (!dataRows.length) throw new Error(`${file.name}: nenhum registro CR`);
 
-  // Identifica mês do arquivo
+  // Identifica mês predominante do arquivo
   const freqMap = {};
   dataRows.forEach(r => {
     const d = parseDate(r['Data Início']);
@@ -108,70 +109,95 @@ async function processarPlanilhaRecente(file, idx, total) {
   if (!Object.keys(freqMap).length) throw new Error(`${file.name}: sem datas válidas`);
   const mesAno = Object.entries(freqMap).sort((a,b)=>b[1]-a[1])[0][0];
 
-  // Se mês atual, apaga antes
+  // Se mês atual, apaga antes de reinserir
   const mesAtual = mesAnoKey(new Date());
   if (mesAno === mesAtual) {
     setStatusRecente(`⏳ Limpando mês atual...`, 'loading');
     await db.from('historico_recente').delete().eq('mes_ano', mesAno);
   }
 
-  // Prepara e insere em lotes
+  // ── Processa linhas ────────────────────────────────────────
   setStatusRecente(`⏳ Salvando ${dataRows.length} registros de ${mesAno}...`, 'loading');
-  const docs = [];
+  const docs          = [];
   const _alimentadorMap = {}; // uc → alimentador (campo AL)
+
   for (const row of dataRows) {
     const ocorrencia = String(row['Número']||'').trim();
     if (!ocorrencia) continue;
-    const estado     = String(row['Estado']||'').trim();
-    const pe         = String(row['Ponto Elétrico']||'').trim();
-    const equipe     = String(row['Equipe']||'').trim();
-    const dtInicio   = parseDate(row['Data Início']);
-    const dtFim      = parseDate(row['Data Fim']);
-    const seccional  = String(row['Seccional']||'').trim();
-    const municipio  = String(row['Município']||'').trim();
+
+    const estado    = String(row['Estado']||'').trim();
+    const pe        = String(row['Ponto Elétrico']||'').trim();
+    const equipe    = String(row['Equipe']||'').trim();
+    const dtInicio  = parseDate(row['Data Início']);
+    const dtFim     = parseDate(row['Data Fim']);
+    const seccional = String(row['Seccional']||'').trim();
+    const municipio = String(row['Município']||'').trim();
     const causaFinal = limparTexto(String(row['Causa']||row['Motivo']||'').trim());
+
+    // ── Extração de UC a partir de "Ponto Elétrico" ──────────
+    // Tudo que vier antes de " -" é a UC de referência.
+    // Ex: "1234567 - BAIRRO RUA" → uc = "1234567"
+    const ucMatch = pe.match(/^(.+?)\s+-\s/);
+    const ucRaw   = ucMatch ? ucMatch[1].trim() : pe.split(' -')[0].trim();
+
+    // Ignora equipamentos não-numéricos (TR..., GN..., etc.)
+    if (/[a-zA-Z]/.test(ucRaw)) continue;
+
+    const uc = sanitizeId(ucRaw);
+    if (!uc) continue;
+
+    // ── Alimentador/Município (somente após uc ser declarada) ─
     const alimentador = String(row['AL']||row['Al']||row['Alimentador']||'').trim();
     if (alimentador && !/^[-\s]+$/.test(alimentador) && alimentador.length >= 3) {
       _alimentadorMap[uc] = alimentador;
     }
-    const ucMatch    = pe.match(/^(.+?)\s+-\s/);
-    const ucRaw      = ucMatch ? ucMatch[1].trim() : pe.split(' -')[0].trim();
-    if (/[a-zA-Z]/.test(ucRaw)) continue; // ignora equipamentos não-numéricos (TR..., GN...)
-    const uc         = sanitizeId(ucRaw);
+
     const finalizado = estado.toUpperCase().includes('FINALIZADA');
     const ativo      = !finalizado && ESTADOS_ATIVOS.some(e => estado.toUpperCase().includes(e));
+
     docs.push({
-      id:        sanitizeId(`${mesAno}_${ocorrencia}`),
-      ocorrencia: sanitizeId(ocorrencia),
-      estado, ponto_eletrico: pe, uc,
-      equipe:    equipe   ||'----',
-      dt_inicio: dtInicio ? dtInicio.toISOString() : null,
-      dt_fim:    dtFim    ? dtFim.toISOString()    : null,
-      causa: causaFinal, seccional, municipio,
-      mes_ano: mesAno, finalizado, ativo,
-      procedente: isProcedente(causaFinal)
+      id:             sanitizeId(`${mesAno}_${ocorrencia}`),
+      ocorrencia:     sanitizeId(ocorrencia),
+      estado,
+      ponto_eletrico: pe,
+      uc,
+      equipe:         equipe || '----',
+      dt_inicio:      dtInicio ? dtInicio.toISOString() : null,
+      dt_fim:         dtFim   ? dtFim.toISOString()    : null,
+      causa:          causaFinal,
+      seccional,
+      municipio,
+      mes_ano:        mesAno,
+      finalizado,
+      ativo,
+      procedente:     isProcedente(causaFinal)
     });
   }
 
-  // Upsert em lotes com progresso visual
+  if (!docs.length) throw new Error(`${file.name}: nenhum registro válido após filtros`);
+
+  // ── Upsert em lotes com progresso visual ──────────────────
   for (let i = 0; i < docs.length; i += 800) {
     const { error } = await db.from('historico_recente').upsert(docs.slice(i, i+800));
     if (error) throw new Error(error.message);
-    const pct = Math.round(((i + 200) / docs.length) * 100);
-    setStatusRecente(`⏳ Salvando ${Math.min(i+200, docs.length)}/${docs.length} registros de ${mesAno}...`, 'loading', Math.min(pct,100));
+    const pct = Math.round(((i + 800) / docs.length) * 100);
+    setStatusRecente(
+      `⏳ Salvando ${Math.min(i+800, docs.length)}/${docs.length} registros de ${mesAno}...`,
+      'loading', Math.min(pct, 100)
+    );
   }
 
-  // Meta
+  // ── Meta do mês ───────────────────────────────────────────
   await db.from('historico_recente_meta')
     .upsert({
-      mes_ano: mesAno,
-      arquivo: file.name,
+      mes_ano:         mesAno,
+      arquivo:         file.name,
       total_registros: docs.length,
-      atualizado_em: new Date().toISOString()
+      atualizado_em:   new Date().toISOString()
     }, { onConflict: 'mes_ano', ignoreDuplicates: false });
 
-  // Recursos regionais
-  const _regCfg = typeof getRegional==='function' ? getRegional() : null;
+  // ── Rastrear alimentador (regional Goiânia) ───────────────
+  const _regCfg = typeof getRegional === 'function' ? getRegional() : null;
   if (_regCfg?.features?.alimentador) await rastrearAlimentador(docs, mesAno, _alimentadorMap);
 
   return { mesAno, total: docs.length };
@@ -189,7 +215,7 @@ async function processarArquivosRecentes(files) {
       const r = await processarPlanilhaRecente(files[i], i, files.length);
       resultados.push(r);
     }
-    const resumo = resultados.map(r=>`${r.mesAno} (${r.total} reg.)`).join(', ');
+    const resumo = resultados.map(r => `${r.mesAno} (${r.total} reg.)`).join(', ');
     releaseWakeLock();
     setStatusRecente(`✅ Concluído! ${resumo}`, 'success');
     if (window.atualizarStatusBases) window.atualizarStatusBases();

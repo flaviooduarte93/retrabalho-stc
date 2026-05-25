@@ -1,159 +1,146 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="theme-color" content="#0D47A1"/>
-  <meta name="mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-capable" content="yes"/>
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
-  <title>Detalhamento — Equatorial Retrabalho</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"/>
-  <link rel="stylesheet" href="style.css"/>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<meta charset="UTF-8"/>
+<meta name="theme-color" content="#0D47A1"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+<title>Detalhamento — Equatorial Retrabalho</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap"/>
+<link rel="stylesheet" href="style.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body class="inner-page">
-  <nav class="topbar">
-    <div class="topbar-brand">
-      <span class="brand-title">eq<span>ua</span>torial</span>
-      <span class="topbar-badge" id="regional-badge">Retrabalho</span>
-    </div>
-    <div class="topbar-nav">
-      <a href="index.html" class="topbar-navitem">Início</a>
-      <span class="topbar-navsep">›</span>
-      <span class="topbar-navitem topbar-navitem--current">UCs em Retrabalho</span>
-    </div>
-    <button onclick="sair()" style="margin-left:auto;padding:6px 18px;border-radius:20px;border:1.5px solid rgba(255,255,255,.35);background:rgba(255,255,255,.1);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .15s;backdrop-filter:blur(4px)" onmouseover="this.style.background='rgba(255,255,255,.22)'" onmouseout="this.style.background='rgba(255,255,255,.1)'">Sair ↩</button>
-  </nav>
 
-  <main class="page-main">
-    <h1 class="page-title">UCs em Retrabalho sem Ocorrência Ativa</h1>
-    <p class="page-subtitle">UCs com histórico de retrabalho dentro do período de 90 dias que não possuem ocorrência ativa no momento.</p>
-    <div id="stats-det"></div>
+<nav class="topbar">
+  <div class="topbar-brand">
+    <span class="brand-title">eq<span>ua</span>torial</span>
+    <span class="topbar-badge" id="regional-badge">Retrabalho</span>
+  </div>
+  <div class="topbar-nav">
+    <a href="index.html" class="topbar-navitem">Início</a>
+    <span class="topbar-navsep">›</span>
+    <span class="topbar-navitem topbar-navitem--current">UCs em Retrabalho</span>
+  </div>
+</nav>
 
-    <!-- Gráfico de velocidade de reincidência -->
-    <div class="result-card" style="margin-bottom:20px">
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
-        <div>
-          <div class="gantt-title" style="margin-bottom:2px">Velocidade de Reincidência</div>
-          <div style="font-size:.75rem;color:var(--eq-gray-500)">Dias entre o atendimento anterior e o retorno ao retrabalho</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
-          <label style="font-size:.78rem;font-weight:600;color:var(--eq-gray-600)">Mês:</label>
-          <select id="filtro-mes-grafico" class="filtro-select" onchange="renderGraficoReincidencia()" style="font-size:.82rem;padding:7px 10px">
-          </select>
-        </div>
+<main class="page-main">
+  <h1 class="page-title">UCs em Retrabalho sem Ocorrência Ativa</h1>
+  <p class="page-subtitle">UCs com histórico de retrabalho dentro do período de 90 dias que não possuem ocorrência ativa no momento.</p>
+
+  <div id="stats-det"></div>
+
+  <!-- Gráfico de velocidade de reincidência -->
+  <div class="result-card" style="margin-bottom:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px">
+      <div>
+        <div class="gantt-title" style="margin-bottom:2px">Velocidade de Reincidência</div>
+        <div style="font-size:.75rem;color:var(--eq-gray-500)">Dias entre o atendimento anterior e o retorno ao retrabalho</div>
       </div>
-      <div style="position:relative;height:260px">
-        <canvas id="chart-reincidencia"></canvas>
-      </div>
-    </div>
-
-    <!-- Tabela de detalhes ao clicar na barra -->
-    <div id="detalhe-faixa" style="display:none;margin-bottom:20px">
-      <div class="result-card" style="border-left:4px solid var(--eq-blue)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
-          <div class="gantt-title" id="detalhe-faixa-titulo" style="margin-bottom:0"></div>
-          <button onclick="document.getElementById('detalhe-faixa').style.display='none'" style="padding:5px 14px;border-radius:8px;border:1.5px solid var(--eq-gray-200);background:#fff;font-family:inherit;font-size:.78rem;cursor:pointer;color:var(--eq-gray-600)">✕ Fechar</button>
-        </div>
-        <div class="historico-table-wrap">
-          <table class="historico-table">
-            <thead><tr>
-              <th>UC</th>
-              <th>Equipe</th>
-              <th>Data Finalização</th>
-              <th>Ocorrência</th>
-              <th>Causa</th>
-            </tr></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <div id="det-container"></div>
-  </main>
-
-  <!-- ===== MODAL DELEGAÇÃO DE INSPEÇÃO ===== -->
-  <div id="modal-delegar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;align-items:center;justify-content:center;padding:16px">
-    <div style="background:#fff;border-radius:16px;padding:28px 24px;width:100%;max-width:480px;box-shadow:0 24px 64px rgba(0,0,0,.2)">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
-        <div>
-          <div style="font-size:.72rem;font-weight:600;color:var(--eq-gray-400);text-transform:uppercase;letter-spacing:.5px">Delegação de Inspeção</div>
-          <div id="modal-uc-label" style="font-size:1.15rem;font-weight:800;color:var(--eq-blue-dark);margin-top:2px"></div>
-          <div id="modal-dias-label" style="font-size:.78rem;color:var(--eq-gray-500);margin-top:2px"></div>
-        </div>
-        <button onclick="fecharModalDelegar()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--eq-gray-400);line-height:1">✕</button>
-      </div>
-
-      <div id="modal-historico" style="display:none;margin-bottom:16px"></div>
-
-      <input type="hidden" id="modal-uc-val"/>
-      <input type="hidden" id="modal-dias-val"/>
-      <input type="hidden" id="modal-saida-val"/>
-
-      <div style="margin-bottom:14px">
-        <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">👤 Fiscal responsável</label>
-        <select id="sel-fiscal" style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.88rem;color:var(--eq-gray-900)">
-          <option value="">Selecione um fiscal...</option>
-          <!-- Fiscais carregados via JS -->
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:.78rem;font-weight:600;color:var(--eq-gray-600)">Mês:</label>
+        <select id="filtro-mes-grafico" class="filtro-select" onchange="renderGraficoReincidencia()" style="font-size:.82rem;padding:7px 10px">
         </select>
       </div>
+    </div>
+    <div style="position:relative;height:260px">
+      <canvas id="chart-reincidencia"></canvas>
+    </div>
+  </div>
 
-      <div style="margin-bottom:14px">
-        <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">📋 Status da inspeção</label>
-        <div style="display:flex;gap:8px;flex-wrap:wrap">
-          <label class="radio-card" style="flex:1;min-width:120px">
-            <input type="radio" name="status-insp" value="pendente" onchange="document.getElementById('sel-status').value='pendente';toggleAcao()" checked/>
-            <span>⏳ Pendente</span>
-          </label>
-          <label class="radio-card" style="flex:1;min-width:120px">
-            <input type="radio" name="status-insp" value="ok" onchange="document.getElementById('sel-status').value='ok';toggleAcao()"/>
-            <span>✅ Tudo OK</span>
-          </label>
-          <label class="radio-card" style="flex:1;min-width:120px">
-            <input type="radio" name="status-insp" value="acao_necessaria" onchange="document.getElementById('sel-status').value='acao_necessaria';toggleAcao()"/>
-            <span>⚠ Ação necessária</span>
-          </label>
-        </div>
-        <input type="hidden" id="sel-status" value="pendente"/>
+  <!-- Tabela de detalhes ao clicar na barra -->
+  <div id="detalhe-faixa" style="display:none;margin-bottom:20px">
+    <div class="result-card" style="border-left:4px solid var(--eq-blue)">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
+        <div class="gantt-title" id="detalhe-faixa-titulo" style="margin-bottom:0"></div>
+        <button onclick="document.getElementById('detalhe-faixa').style.display='none'" style="padding:5px 14px;border-radius:8px;border:1.5px solid var(--eq-gray-200);background:#fff;font-family:inherit;font-size:.78rem;cursor:pointer;color:var(--eq-gray-600)">✕ Fechar</button>
       </div>
-
-      <div id="acao-row" style="display:none;margin-bottom:14px">
-        <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">🔧 Ação necessária</label>
-        <select id="sel-acao" style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-amber);font-family:inherit;font-size:.88rem;color:var(--eq-gray-900)">
-          <option value="">Selecione a ação...</option>
-          <option value="troca_conector">Troca de conector</option>
-          <option value="troca_ramal">Troca do ramal</option>
-          <option value="poda_arvore">Poda de árvore</option>
-          <option value="outros">Outros</option>
-        </select>
-      </div>
-
-      <div style="margin-bottom:20px">
-        <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">📝 Observação <span style="font-weight:400;color:var(--eq-gray-400)">(opcional)</span></label>
-        <textarea id="txt-obs" rows="3" placeholder="Descreva o que foi encontrado na inspeção..." style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.85rem;resize:vertical;box-sizing:border-box"></textarea>
-      </div>
-
-      <div style="display:flex;gap:10px;justify-content:flex-end">
-        <button onclick="fecharModalDelegar()" style="padding:10px 20px;border-radius:10px;border:1.5px solid var(--eq-gray-200);background:#fff;font-family:inherit;font-size:.88rem;cursor:pointer;color:var(--eq-gray-600)">Cancelar</button>
-        <button id="btn-salvar-delegacao" onclick="salvarDelegacao()" style="padding:10px 24px;border-radius:10px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.88rem;font-weight:700;cursor:pointer">Salvar</button>
+      <div class="historico-table-wrap">
+        <table class="historico-table">
+          <thead><tr>
+            <th>UC</th>
+            <th>Equipe</th>
+            <th>Data Finalização</th>
+            <th>Ocorrência</th>
+            <th>Causa</th>
+          </tr></thead>
+          <tbody></tbody>
+        </table>
       </div>
     </div>
   </div>
 
-  <script src="regional-config.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="supabase-init.js"></script>
-  <script src="causas-improcedentes.js"></script>
-  <script src="detalhamento.js"></script>
-  <script src="regional-init.js"></script>
-  <script>
-    function sair() {
-      sessionStorage.removeItem('auth_home');
-      window.location.href = 'index.html';
-    }
-  </script>
+  <div id="det-container"></div>
+</main>
+
+<!-- ===== MODAL DELEGAÇÃO ===== -->
+<div id="modal-delegar" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:1000;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:16px;padding:28px 24px;width:100%;max-width:480px;box-shadow:0 24px 64px rgba(0,0,0,.2)">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
+      <div>
+        <div style="font-size:.72rem;font-weight:600;color:var(--eq-gray-400);text-transform:uppercase;letter-spacing:.5px">Delegação de Inspeção</div>
+        <div id="modal-uc-label" style="font-size:1.15rem;font-weight:800;color:var(--eq-blue-dark);margin-top:2px"></div>
+        <div id="modal-dias-label" style="font-size:.78rem;color:var(--eq-gray-500);margin-top:2px"></div>
+      </div>
+      <button onclick="fecharModalDelegar()" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--eq-gray-400);line-height:1">✕</button>
+    </div>
+    <div id="modal-historico" style="display:none;margin-bottom:16px"></div>
+    <input type="hidden" id="modal-uc-val"/>
+    <input type="hidden" id="modal-dias-val"/>
+    <input type="hidden" id="modal-saida-val"/>
+    <div style="margin-bottom:14px">
+      <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">👤 Fiscal responsável</label>
+      <select id="sel-fiscal" style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.88rem;color:var(--eq-gray-900)">
+        <option value="">Selecione um fiscal...</option>
+      </select>
+    </div>
+    <div style="margin-bottom:14px">
+      <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">📋 Status da inspeção</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <label class="radio-card" style="flex:1;min-width:120px">
+          <input type="radio" name="status-insp" value="pendente" onchange="document.getElementById('sel-status').value='pendente';toggleAcao()" checked/>
+          <span>⏳ Pendente</span>
+        </label>
+        <label class="radio-card" style="flex:1;min-width:120px">
+          <input type="radio" name="status-insp" value="ok" onchange="document.getElementById('sel-status').value='ok';toggleAcao()"/>
+          <span>✅ Tudo OK</span>
+        </label>
+        <label class="radio-card" style="flex:1;min-width:120px">
+          <input type="radio" name="status-insp" value="acao_necessaria" onchange="document.getElementById('sel-status').value='acao_necessaria';toggleAcao()"/>
+          <span>⚠ Ação necessária</span>
+        </label>
+      </div>
+      <input type="hidden" id="sel-status" value="pendente"/>
+    </div>
+    <div id="acao-row" style="display:none;margin-bottom:14px">
+      <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">🔧 Ação necessária</label>
+      <select id="sel-acao" style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-amber);font-family:inherit;font-size:.88rem;color:var(--eq-gray-900)">
+        <option value="">Selecione a ação...</option>
+        <option value="troca_conector">Troca de conector</option>
+        <option value="troca_ramal">Troca do ramal</option>
+        <option value="poda_arvore">Poda de árvore</option>
+        <option value="outros">Outros</option>
+      </select>
+    </div>
+    <div style="margin-bottom:20px">
+      <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">📝 Observação <span style="font-weight:400;color:var(--eq-gray-400)">(opcional)</span></label>
+      <textarea id="txt-obs" rows="3" placeholder="Descreva o que foi encontrado na inspeção..." style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.85rem;resize:vertical;box-sizing:border-box"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button onclick="fecharModalDelegar()" style="padding:10px 20px;border-radius:10px;border:1.5px solid var(--eq-gray-200);background:#fff;font-family:inherit;font-size:.88rem;cursor:pointer;color:var(--eq-gray-600)">Cancelar</button>
+      <button id="btn-salvar-delegacao" onclick="salvarDelegacao()" style="padding:10px 24px;border-radius:10px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.88rem;font-weight:700;cursor:pointer">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="regional-config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="supabase-init.js"></script>
+<script src="causas-improcedentes.js"></script>
+<script src="detalhamento.js"></script>
+<script src="regional-init.js"></script>
 </body>
 </html>
