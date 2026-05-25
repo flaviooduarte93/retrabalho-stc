@@ -16,7 +16,7 @@ async function rastrearAlimentador(docs, mesAno, alimentadorMap = {}) {
   const mapAtual = {};
   (histAtual||[]).forEach(h => { mapAtual[h.uc] = h; });
 
-  const agora = new Date().toISOString();
+  const agora   = new Date().toISOString();
   const updates = [];
   for (const d of docs) {
     const novoAlim = alimentadorMap[d.uc] || null;
@@ -58,20 +58,20 @@ function setStatusRecente(msg, type, pct = null) {
       </div>`;
   }
   el.innerHTML = `<span>${msg}</span>${progressHtml}`;
-  el.className = 'upload-status '+(type||'');
+  el.className = 'upload-status ' + (type || '');
 }
 
-const ESTADOS_ATIVOS = ['PREPARAÇÃO','TRABALHANDO','DESLOCAMENTO','MULTIPLA'];
+const ESTADOS_ATIVOS = ['PREPARAÇÃO', 'TRABALHANDO', 'DESLOCAMENTO', 'MULTIPLA'];
 
 async function limparMesesAntigos() {
   const hoje = new Date();
   const mesesValidos = new Set([mesAnoKey(hoje)]);
   for (let i = 1; i <= 3; i++) {
-    const d = new Date(hoje.getFullYear(), hoje.getMonth()-i, 1);
+    const d = new Date(hoje.getFullYear(), hoje.getMonth() - i, 1);
     mesesValidos.add(mesAnoKey(d));
   }
   const { data: metas } = await db.from('historico_recente_meta').select('mes_ano');
-  const expirados = (metas||[]).map(m=>m.mes_ano).filter(m=>!mesesValidos.has(m));
+  const expirados = (metas || []).map(m => m.mes_ano).filter(m => !mesesValidos.has(m));
   for (const mes of expirados) {
     await db.from('historico_recente').delete().eq('mes_ano', mes);
     await db.from('historico_recente_meta').delete().eq('mes_ano', mes);
@@ -80,12 +80,12 @@ async function limparMesesAntigos() {
 }
 
 async function processarPlanilhaRecente(file, idx, total) {
-  setStatusRecente(`⏳ Lendo arquivo ${idx+1}/${total}...`, 'loading');
-  const data = await file.arrayBuffer();
-  const wb   = XLSX.read(data);
-  const allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:'' });
+  setStatusRecente(`⏳ Lendo arquivo ${idx + 1}/${total}...`, 'loading');
+  const data    = await file.arrayBuffer();
+  const wb      = XLSX.read(data);
+  const allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
 
-  // Localiza cabeçalho
+  // ── Localiza cabeçalho ─────────────────────────────────────
   let headerIdx = -1;
   for (let i = 0; i < Math.min(5, allRows.length); i++) {
     if (allRows[i].some(c => String(c).trim() === 'Número')) { headerIdx = i; break; }
@@ -93,61 +93,51 @@ async function processarPlanilhaRecente(file, idx, total) {
   if (headerIdx === -1) throw new Error(`${file.name}: cabeçalho não encontrado`);
 
   const headers  = allRows[headerIdx].map(h => String(h).trim());
-  const dataRows = allRows.slice(headerIdx+1)
+  const dataRows = allRows.slice(headerIdx + 1)
     .filter(r => r.some(c => c !== ''))
-    .map(r => { const o={}; headers.forEach((h,i)=>{ o[h]=r[i]??''; }); return o; })
-    .filter(r => String(r['Abrangência']||'').trim().toUpperCase() === 'CR');
+    .map(r => { const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ''; }); return o; })
+    .filter(r => String(r['Abrangência'] || '').trim().toUpperCase() === 'CR');
 
   if (!dataRows.length) throw new Error(`${file.name}: nenhum registro CR`);
 
-  // Identifica mês predominante do arquivo
+  // ── Identifica mês predominante ────────────────────────────
   const freqMap = {};
   dataRows.forEach(r => {
     const d = parseDate(r['Data Início']);
-    if (d) { const k = mesAnoKey(d); freqMap[k] = (freqMap[k]||0)+1; }
+    if (d) { const k = mesAnoKey(d); freqMap[k] = (freqMap[k] || 0) + 1; }
   });
   if (!Object.keys(freqMap).length) throw new Error(`${file.name}: sem datas válidas`);
-  const mesAno = Object.entries(freqMap).sort((a,b)=>b[1]-a[1])[0][0];
+  const mesAno = Object.entries(freqMap).sort((a, b) => b[1] - a[1])[0][0];
 
-  // Se mês atual, apaga antes de reinserir
-  const mesAtual = mesAnoKey(new Date());
-  if (mesAno === mesAtual) {
-    setStatusRecente(`⏳ Limpando mês atual...`, 'loading');
-    await db.from('historico_recente').delete().eq('mes_ano', mesAno);
-  }
-
-  // ── Processa linhas ────────────────────────────────────────
-  setStatusRecente(`⏳ Salvando ${dataRows.length} registros de ${mesAno}...`, 'loading');
-  const docs          = [];
-  const _alimentadorMap = {}; // uc → alimentador (campo AL)
+  // ── Monta docs (com correção do TDZ: uc declarada ANTES de _alimentadorMap) ─
+  const docs           = [];
+  const _alimentadorMap = {};
 
   for (const row of dataRows) {
-    const ocorrencia = String(row['Número']||'').trim();
+    const ocorrencia = String(row['Número'] || '').trim();
     if (!ocorrencia) continue;
 
-    const estado    = String(row['Estado']||'').trim();
-    const pe        = String(row['Ponto Elétrico']||'').trim();
-    const equipe    = String(row['Equipe']||'').trim();
+    const estado    = String(row['Estado'] || '').trim();
+    const pe        = String(row['Ponto Elétrico'] || '').trim();
+    const equipe    = String(row['Equipe'] || '').trim();
     const dtInicio  = parseDate(row['Data Início']);
     const dtFim     = parseDate(row['Data Fim']);
-    const seccional = String(row['Seccional']||'').trim();
-    const municipio = String(row['Município']||'').trim();
-    const causaFinal = limparTexto(String(row['Causa']||row['Motivo']||'').trim());
+    const seccional = String(row['Seccional'] || '').trim();
+    const municipio = String(row['Município'] || '').trim();
+    const causaFinal = limparTexto(String(row['Causa'] || row['Motivo'] || '').trim());
 
-    // ── Extração de UC a partir de "Ponto Elétrico" ──────────
-    // Tudo que vier antes de " -" é a UC de referência.
-    // Ex: "1234567 - BAIRRO RUA" → uc = "1234567"
+    // Extração de UC: tudo antes de " -" no Ponto Elétrico
     const ucMatch = pe.match(/^(.+?)\s+-\s/);
     const ucRaw   = ucMatch ? ucMatch[1].trim() : pe.split(' -')[0].trim();
 
     // Ignora equipamentos não-numéricos (TR..., GN..., etc.)
-    if (/[a-zA-Z]/.test(ucRaw)) continue;
+    if (!ucRaw || /[a-zA-Z]/.test(ucRaw)) continue;
 
     const uc = sanitizeId(ucRaw);
     if (!uc) continue;
 
-    // ── Alimentador/Município (somente após uc ser declarada) ─
-    const alimentador = String(row['AL']||row['Al']||row['Alimentador']||'').trim();
+    // Alimentador — declarado APÓS uc (evita TDZ)
+    const alimentador = String(row['AL'] || row['Al'] || row['Alimentador'] || '').trim();
     if (alimentador && !/^[-\s]+$/.test(alimentador) && alimentador.length >= 3) {
       _alimentadorMap[uc] = alimentador;
     }
@@ -156,7 +146,6 @@ async function processarPlanilhaRecente(file, idx, total) {
     const ativo      = !finalizado && ESTADOS_ATIVOS.some(e => estado.toUpperCase().includes(e));
 
     docs.push({
-      id:             sanitizeId(`${mesAno}_${ocorrencia}`),
       ocorrencia:     sanitizeId(ocorrencia),
       estado,
       ponto_eletrico: pe,
@@ -176,31 +165,56 @@ async function processarPlanilhaRecente(file, idx, total) {
 
   if (!docs.length) throw new Error(`${file.name}: nenhum registro válido após filtros`);
 
-  // ── Upsert em lotes com progresso visual ──────────────────
-  for (let i = 0; i < docs.length; i += 800) {
-    const { error } = await db.from('historico_recente').upsert(docs.slice(i, i+800));
-    if (error) throw new Error(error.message);
-    const pct = Math.round(((i + 800) / docs.length) * 100);
+  // ── DELETE do mês inteiro antes de inserir (evita conflitos silenciosos) ────
+  setStatusRecente(`⏳ Limpando dados de ${mesAno}...`, 'loading');
+  const { error: delError } = await db.from('historico_recente').delete().eq('mes_ano', mesAno);
+  if (delError) throw new Error(`Erro ao limpar ${mesAno}: ${delError.message}`);
+
+  // ── INSERT em lotes (mais seguro que upsert sem onConflict explícito) ────────
+  const BATCH = 500;
+  for (let i = 0; i < docs.length; i += BATCH) {
+    const lote = docs.slice(i, i + BATCH);
+    const { error } = await db.from('historico_recente').insert(lote);
+    if (error) throw new Error(`Erro ao inserir registros de ${mesAno}: ${error.message}`);
+
+    const pct = Math.round(((i + lote.length) / docs.length) * 100);
     setStatusRecente(
-      `⏳ Salvando ${Math.min(i+800, docs.length)}/${docs.length} registros de ${mesAno}...`,
-      'loading', Math.min(pct, 100)
+      `⏳ Salvando ${Math.min(i + lote.length, docs.length)}/${docs.length} registros de ${mesAno}...`,
+      'loading', pct
     );
   }
 
-  // ── Meta do mês ───────────────────────────────────────────
-  await db.from('historico_recente_meta')
+  // ── Verificação: confirma que os dados foram gravados ─────────────────────
+  const { count, error: countError } = await db
+    .from('historico_recente')
+    .select('*', { count: 'exact', head: true })
+    .eq('mes_ano', mesAno);
+
+  if (countError) throw new Error(`Erro ao verificar gravação: ${countError.message}`);
+  if (!count || count === 0) {
+    throw new Error(
+      `Os dados foram enviados mas não foram gravados no banco. ` +
+      `Verifique as políticas de acesso (RLS) da tabela historico_recente no Supabase.`
+    );
+  }
+  console.log(`✅ ${mesAno}: ${count} registros confirmados no banco.`);
+
+  // ── Meta ──────────────────────────────────────────────────────────────────
+  const { error: metaError } = await db.from('historico_recente_meta')
     .upsert({
       mes_ano:         mesAno,
       arquivo:         file.name,
-      total_registros: docs.length,
+      total_registros: count,
       atualizado_em:   new Date().toISOString()
     }, { onConflict: 'mes_ano', ignoreDuplicates: false });
 
-  // ── Rastrear alimentador (regional Goiânia) ───────────────
+  if (metaError) console.warn(`Aviso meta: ${metaError.message}`);
+
+  // ── Rastrear alimentador (Goiânia) ────────────────────────────────────────
   const _regCfg = typeof getRegional === 'function' ? getRegional() : null;
   if (_regCfg?.features?.alimentador) await rastrearAlimentador(docs, mesAno, _alimentadorMap);
 
-  return { mesAno, total: docs.length };
+  return { mesAno, total: count };
 }
 
 async function processarArquivosRecentes(files) {
@@ -215,12 +229,15 @@ async function processarArquivosRecentes(files) {
       const r = await processarPlanilhaRecente(files[i], i, files.length);
       resultados.push(r);
     }
+
     const resumo = resultados.map(r => `${r.mesAno} (${r.total} reg.)`).join(', ');
     releaseWakeLock();
     setStatusRecente(`✅ Concluído! ${resumo}`, 'success');
     if (window.atualizarStatusBases) window.atualizarStatusBases();
-  } catch(err) {
+
+  } catch (err) {
     console.error(err);
+    releaseWakeLock();
     setStatusRecente(`❌ Erro: ${err.message}`, 'error');
   }
 }
