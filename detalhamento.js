@@ -14,7 +14,7 @@ function diasRestantes(dc){if(!dc)return null;return Math.ceil((new Date(new Dat
 function calcPct90(dc){if(!dc)return 0;const ini=new Date(dc),fim=new Date(ini.getTime()+91*86400000),hoje=new Date();if(hoje>=fim)return 100;if(hoje<=ini)return 0;return Math.min(100,Math.round((hoje-ini)/(fim-ini)*100));}
 
 let _lista=[], _criterio='menor-tempo', _filtro='', _filtroCard='todos', _filtroInsp='todos';
-let _paginaAtual=1, _porPagina=20, _filtroMunicipio='';
+let _paginaAtual=1, _porPagina=20, _filtroMunicipio='', _filtroAlimentador='';
 let _histTodos=[], _chartReincidencia=null;
 let _inspecoesMap = {}; // uc → inspecao mais recente
 
@@ -187,6 +187,12 @@ function badgeInspecao(uc) {
 function filtrarMunicipio(v) {
   _paginaAtual = 1;
   _filtroMunicipio = v;
+  aplicarFiltroOrdem();
+}
+
+function filtrarAlimentador(v) {
+  _paginaAtual = 1;
+  _filtroAlimentador = v;
   aplicarFiltroOrdem();
 }
 
@@ -400,7 +406,13 @@ function renderLista(lista){
       <div class="dropdown-header" onclick="toggleDropdown('${uid}')">
         <div class="dropdown-header-left">
           <div class="dropdown-uc">UC ${h.uc}</div>
-          <div class="dropdown-meta">${h.municipio?`<span style='font-size:.68rem;color:var(--eq-gray-400);font-weight:600'>${h.municipio}</span> · `:''} ${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
+          <div class="dropdown-meta">${(()=>{
+            const _rc2=typeof getRegional==='function'?getRegional():null;
+            const _alim=_rc2?.features?.alimentador;
+            if(_alim&&h.alimentador) return `<span style='font-size:.68rem;background:#E3F2FD;color:#1565C0;font-weight:700;padding:1px 8px;border-radius:20px;white-space:nowrap'>⚡ ${h.alimentador}</span> · `;
+            if(h.municipio) return `<span style='font-size:.68rem;color:var(--eq-gray-400);font-weight:600'>${h.municipio}</span> · `;
+            return '';
+          })()} ${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
           ${badgeInspecao(h.uc)}
         </div>
         <div class="dropdown-header-right">
@@ -430,7 +442,8 @@ function listaFiltrada(){
   else if(_filtroCard==='alerta') lista=lista.filter(h=>{const d=diasRestantes(h.data_conc);return d>10&&d<=30;});
   else if(_filtroCard==='ok') lista=lista.filter(h=>diasRestantes(h.data_conc)>30);
   if(_filtro.trim()) lista=lista.filter(h=>h.uc.toLowerCase().includes(_filtro.trim().toLowerCase()));
-  if(_filtroMunicipio) lista=lista.filter(h=>h.municipio===_filtroMunicipio);
+  if(_filtroMunicipio)   lista=lista.filter(h=>h.municipio===_filtroMunicipio);
+  if(_filtroAlimentador) lista=lista.filter(h=>h.alimentador===_filtroAlimentador);
   // Filtro por status de inspeção
   if(_filtroInsp === 'delegadas') lista=lista.filter(h=>!!_inspecoesMap[h.uc]);
   else if(_filtroInsp === 'ok')              lista=lista.filter(h=>_inspecoesMap[h.uc]?.status==='ok');
@@ -564,6 +577,25 @@ async function carregar(){
     }).map(h=>({...h,fim90:new Date(new Date(h.data_conc).getTime()+91*86400000)}));
     _lista.sort((a,b)=>diasRestantes(a.data_conc)-diasRestantes(b.data_conc));
 
+    // Busca alimentador diretamente de historico_recente (fonte correta)
+    const _ucsLista = [...new Set(_lista.map(h=>h.uc))];
+    if (_ucsLista.length) {
+      const { data: _recenteAlim } = await db
+        .from('historico_recente')
+        .select('uc,alimentador')
+        .in('uc', _ucsLista)
+        .not('alimentador', 'is', null)
+        .order('dt_inicio', { ascending: false });
+      const _alimentMap = {};
+      for (const r of (_recenteAlim||[])) {
+        if (!_alimentMap[r.uc] && r.alimentador) _alimentMap[r.uc] = r.alimentador;
+      }
+      _lista = _lista.map(h => ({
+        ...h,
+        alimentador: _alimentMap[h.uc] || h.alimentador || null
+      }));
+    }
+
     const total=_lista.length;
     const critico=_lista.filter(h=>diasRestantes(h.data_conc)<=10).length;
     const alerta=_lista.filter(h=>{const d=diasRestantes(h.data_conc);return d>10&&d<=30;}).length;
@@ -603,7 +635,26 @@ async function carregar(){
         <button class="insp-badge-btn insp-sem" data-filtro-insp="sem_inspecao" onclick="filtrarInsp('sem_inspecao')">
           — <strong>${_lista.filter(h=>!_inspecoesMap[h.uc]).length}</strong> Sem inspeção
         </button>
-      </div>`;
+      </div>
+      ${(() => {
+        const _rc = typeof getRegional==='function' ? getRegional() : null;
+        const _useAlim = _rc?.features?.alimentador;
+        const _vals = _useAlim
+          ? [...new Set(_lista.map(h=>h.alimentador).filter(Boolean))].sort()
+          : [...new Set(_lista.map(h=>h.municipio).filter(Boolean))].sort();
+        if (!_vals.length) return '';
+        const _lbl  = _useAlim ? 'Alimentador' : 'Município';
+        const _fn   = _useAlim ? 'filtrarAlimentador' : 'filtrarMunicipio';
+        const _opts = _vals.map(v=>`<option value="${v}">${v}</option>`).join('');
+        return \`<div style="display:flex;align-items:center;gap:8px">
+          <label style="font-size:.75rem;color:var(--eq-gray-500);font-weight:600;white-space:nowrap">${_lbl}:</label>
+          <select id="sel-alimentador-mun" class="filtro-select" style="font-size:.8rem;padding:6px 10px;min-width:160px" onchange="${_fn}(this.value)">
+            <option value="">Todos</option>
+            \${_opts}
+          </select>
+        </div>\`;
+      })()}
+    </div>`;
 
     document.getElementById('det-container').innerHTML=`
       <div class="historico-toolbar">
