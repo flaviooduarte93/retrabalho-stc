@@ -137,10 +137,10 @@ async function processarPlanilhaRecente(file, idx, total) {
     if (!uc) continue;
 
     // Alimentador — declarado APÓS uc (evita TDZ)
-    const alimentador = String(row['AL'] || row['Al'] || row['Alimentador'] || '').trim();
-    if (alimentador && !/^[-\s]+$/.test(alimentador) && alimentador.length >= 3) {
-      _alimentadorMap[uc] = alimentador;
-    }
+    const _alimentRaw = String(row['AL'] || row['Al'] || row['Alimentador'] || '').trim();
+    const alimentador = (_alimentRaw && !/^[-\s]+$/.test(_alimentRaw) && _alimentRaw.length >= 3)
+      ? _alimentRaw : null;
+    if (alimentador) _alimentadorMap[uc] = alimentador;
 
     const finalizado = estado.toUpperCase().includes('FINALIZADA');
     const ativo      = !finalizado && ESTADOS_ATIVOS.some(e => estado.toUpperCase().includes(e));
@@ -157,6 +157,7 @@ async function processarPlanilhaRecente(file, idx, total) {
       causa:          causaFinal,
       seccional,
       municipio,
+      alimentador,          // ← salvo direto em historico_recente
       mes_ano:        mesAno,
       finalizado,
       ativo,
@@ -237,6 +238,7 @@ async function processarArquivosRecentes(files) {
     const resumo = resultados.map(r => `${r.mesAno} (${r.total} reg.)`).join(', ');
     releaseWakeLock();
     setStatusRecente(`✅ Concluído! ${resumo}`, 'success');
+    setTimeout(() => setStatusRecente('', ''), 6000);
     if (window.atualizarStatusBases) window.atualizarStatusBases();
 
   } catch (err) {
