@@ -200,20 +200,23 @@ async function processarPlanilhaRecente(file, idx, total) {
   }
   console.log(`✅ ${mesAno}: ${count} registros confirmados no banco.`);
 
-  // ── Meta ──────────────────────────────────────────────────────────────────
-  const { error: metaError } = await db.from('historico_recente_meta')
-    .upsert({
-      mes_ano:         mesAno,
-      arquivo:         file.name,
-      total_registros: count,
-      atualizado_em:   new Date().toISOString()
-    }, { onConflict: 'mes_ano', ignoreDuplicates: false });
+  // ── Meta (delete + insert para evitar problema de unique constraint) ─────
+  await db.from('historico_recente_meta').delete().eq('mes_ano', mesAno);
+  const { error: metaError } = await db.from('historico_recente_meta').insert({
+    mes_ano:         mesAno,
+    arquivo:         file.name,
+    total_registros: count,
+    atualizado_em:   new Date().toISOString()
+  });
+  if (metaError) console.warn(`Aviso meta (${mesAno}): ${metaError.message}`);
 
-  if (metaError) console.warn(`Aviso meta: ${metaError.message}`);
-
-  // ── Rastrear alimentador (Goiânia) ────────────────────────────────────────
+  // ── Rastrear alimentador em background (não bloqueia o retorno) ──────────
   const _regCfg = typeof getRegional === 'function' ? getRegional() : null;
-  if (_regCfg?.features?.alimentador) await rastrearAlimentador(docs, mesAno, _alimentadorMap);
+  if (_regCfg?.features?.alimentador) {
+    rastrearAlimentador(docs, mesAno, _alimentadorMap).catch(e =>
+      console.warn('rastrearAlimentador:', e.message)
+    );
+  }
 
   return { mesAno, total: count };
 }
