@@ -646,15 +646,15 @@ async function carregar(){
         const _lbl  = _useAlim ? 'Alimentador' : 'Município';
         const _fn   = _useAlim ? 'filtrarAlimentador' : 'filtrarMunicipio';
         const _opts = _vals.map(v=>`<option value="${v}">${v}</option>`).join('');
-        return \`<div style="display:flex;align-items:center;gap:8px">
+        return <div style="display:flex;align-items:center;gap:8px">
           <label style="font-size:.75rem;color:var(--eq-gray-500);font-weight:600;white-space:nowrap">${_lbl}:</label>
           <select id="sel-alimentador-mun" class="filtro-select" style="font-size:.8rem;padding:6px 10px;min-width:160px" onchange="${_fn}(this.value)">
             <option value="">Todos</option>
             \${_opts}
           </select>
-        </div>\`;
+        </div>;
       })()}
-    </div>`;
+    </div>;
 
     document.getElementById('det-container').innerHTML=`
       <div class="historico-toolbar">
