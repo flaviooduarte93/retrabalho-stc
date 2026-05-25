@@ -146,6 +146,7 @@ async function processarPlanilhaRecente(file, idx, total) {
     const ativo      = !finalizado && ESTADOS_ATIVOS.some(e => estado.toUpperCase().includes(e));
 
     docs.push({
+      id:             sanitizeId(`${mesAno}_${ocorrencia}`),
       ocorrencia:     sanitizeId(ocorrencia),
       estado,
       ponto_eletrico: pe,
