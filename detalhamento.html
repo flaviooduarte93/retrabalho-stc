@@ -17,7 +17,7 @@
   <nav class="topbar">
     <div class="topbar-brand">
       <span class="brand-title">eq<span>ua</span>torial</span>
-      <span class="topbar-badge">Retrabalho</span>
+      <span class="topbar-badge" id="regional-badge">Retrabalho</span>
     </div>
     <div class="topbar-nav">
       <a href="index.html" class="topbar-navitem">Início</a>
@@ -96,11 +96,7 @@
         <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">👤 Fiscal responsável</label>
         <select id="sel-fiscal" style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.88rem;color:var(--eq-gray-900)">
           <option value="">Selecione um fiscal...</option>
-          <option>Hugo Leonardo</option>
-          <option>Rogério Machado</option>
-          <option>Cainan Ataides</option>
-          <option>Francisco Pereira</option>
-          <option>Paulo Henrique</option>
+          <!-- Fiscais carregados via JS -->
         </select>
       </div>
 
@@ -146,9 +142,11 @@
     </div>
   </div>
 
+  <script src="js/regional-config.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="supabase-init.js"></script>
   <script src="causas-improcedentes.js"></script>
   <script src="detalhamento.js"></script>
+  <script src="js/regional-init.js"></script>
 </body>
 </html>

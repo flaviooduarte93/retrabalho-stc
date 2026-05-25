@@ -1,5 +1,44 @@
 // js/upload-recente.js — Supabase version
 
+// ============================================================
+// ALIMENTADOR — Goiânia / MUNICÍPIO — Metropolitana
+// ============================================================
+function _ignorarAlimentador(val) {
+  if (!val) return true;
+  const v = String(val).trim();
+  return !v || /^[-\s]+$/.test(v) || v === '----' || v.length < 3;
+}
+
+async function rastrearAlimentador(docs, mesAno) {
+  const ucs = [...new Set(docs.map(d => d.uc))];
+  if (!ucs.length) return;
+  const { data: histAtual } = await db.from('historico').select('uc,alimentador,alimentador_log').in('uc', ucs);
+  const mapAtual = {};
+  (histAtual||[]).forEach(h => { mapAtual[h.uc] = h; });
+
+  const agora = new Date().toISOString();
+  const updates = [];
+  for (const d of docs) {
+    const novoAlim = _ignorarAlimentador(d.alimentador) ? null : String(d.alimentador).trim();
+    if (!novoAlim) continue;
+    const atual           = mapAtual[d.uc];
+    const alimentadorAtual = atual?.alimentador;
+    const log             = Array.isArray(atual?.alimentador_log) ? atual.alimentador_log : [];
+    if (!alimentadorAtual || alimentadorAtual !== novoAlim) {
+      if (alimentadorAtual && alimentadorAtual !== novoAlim) {
+        log.push({ de: alimentadorAtual, para: novoAlim, mes_ano: mesAno, em: agora });
+      }
+      updates.push({ uc: d.uc, alimentador: novoAlim, alimentador_log: log });
+    }
+  }
+  for (const u of updates) {
+    await db.from('historico').update({ alimentador: u.alimentador, alimentador_log: u.alimentador_log }).eq('uc', u.uc);
+  }
+  if (updates.length) console.log(`Alimentador: ${updates.length} UCs atualizadas`);
+}
+
+
+
 function mesAnoKey(date) {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
 }
@@ -90,6 +129,7 @@ async function processarPlanilhaRecente(file, idx, total) {
     const seccional  = String(row['Seccional']||'').trim();
     const municipio  = String(row['Município']||'').trim();
     const causaFinal = limparTexto(String(row['Causa']||row['Motivo']||'').trim());
+    const alimentador = String(row['AL']||row['Al']||row['Alimentador']||'').trim();
     const ucMatch    = pe.match(/^(.+?)\s+-\s/);
     const ucRaw      = ucMatch ? ucMatch[1].trim() : pe.split(' -')[0].trim();
     if (/[a-zA-Z]/.test(ucRaw)) continue; // ignora equipamentos não-numéricos (TR..., GN...)
@@ -98,6 +138,7 @@ async function processarPlanilhaRecente(file, idx, total) {
     const ativo      = !finalizado && ESTADOS_ATIVOS.some(e => estado.toUpperCase().includes(e));
     docs.push({
       id:        sanitizeId(`${mesAno}_${ocorrencia}`),
+      alimentador: alimentador || null,
       ocorrencia: sanitizeId(ocorrencia),
       estado, ponto_eletrico: pe, uc,
       equipe:    equipe   ||'----',
@@ -125,6 +166,10 @@ async function processarPlanilhaRecente(file, idx, total) {
       total_registros: docs.length,
       atualizado_em: new Date().toISOString()
     }, { onConflict: 'mes_ano', ignoreDuplicates: false });
+
+  // Recursos regionais
+  const _regCfg = typeof getRegional==='function' ? getRegional() : null;
+  if (_regCfg?.features?.alimentador) await rastrearAlimentador(docs, mesAno);
 
   return { mesAno, total: docs.length };
 }
