@@ -22,25 +22,19 @@
     <div class="bg-orb orb-2" style="position:absolute;z-index:0"></div>
 
     <div style="position:relative;z-index:1;width:100%;max-width:400px">
-      <!-- Logo idêntica ao painel -->
-      <div style="display:flex;align-items:center;gap:14px;justify-content:center;margin-bottom:36px">
-        <div style="width:44px;height:44px;background:linear-gradient(135deg,#1565C0,#0D47A1);border-radius:50%;display:flex;align-items:center;justify-content:center">
-          <svg width="24" height="24" viewBox="0 0 48 48" fill="none">
-            <path d="M12 24 L24 12 L36 24 L24 36 Z" fill="none" stroke="#fff" stroke-width="2.5"/>
-            <circle cx="24" cy="24" r="4" fill="#F9A825"/>
-          </svg>
-        </div>
-        <div>
-          <div style="font-size:.65rem;font-weight:600;color:rgba(255,255,255,.4);letter-spacing:2px;text-transform:uppercase">GRUPO</div>
-          <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.4rem;font-weight:800;color:#fff;font-style:italic;line-height:1">equatorial</div>
-        </div>
+      <!-- Logo oficial Equatorial -->
+      <div style="display:flex;justify-content:center;margin-bottom:28px">
+        <img src="https://logospng.org/download/equatorial-energia/logo-equatorial-energia-1536.png"
+          alt="Equatorial Energia"
+          style="height:56px;object-fit:contain;filter:brightness(0) invert(1)"
+          onerror="this.style.display='none'"/>
       </div>
 
       <!-- Card de login -->
       <div style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:36px 32px;text-align:center;backdrop-filter:blur(20px)">
         <div style="font-size:.75rem;font-weight:600;color:rgba(255,255,255,.4);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:6px">Sistema de Gestão de</div>
         <div style="font-family:'Plus Jakarta Sans',sans-serif;font-size:1.6rem;font-weight:800;color:#fff;margin-bottom:4px">Retrabalho</div>
-        <div style="font-size:.8rem;color:rgba(255,255,255,.4);margin-bottom:28px">Regional Goiânia</div>
+        <div id="login-regional-label" style="font-size:.8rem;color:rgba(255,255,255,.4);margin-bottom:28px">Regional Goiânia</div>
 
         <!-- Seletor de regional -->
         <div style="display:flex;gap:8px;margin-bottom:16px">
@@ -69,7 +63,7 @@
         </div>
         <div id="senha-erro" style="color:#FF8A80;font-size:.78rem;margin-bottom:12px;min-height:18px"></div>
         <button onclick="verificarSenha()"
-          style="width:100%;padding:14px;border-radius:12px;border:none;background:#F9A825;color:#0D47A1;font-family:inherit;font-size:.95rem;font-weight:800;cursor:pointer;transition:all .15s;letter-spacing:.3px"
+          style="width:100%;padding:14px;border-radius:12px;border:none;background:#F9A825;color:#fff;font-family:inherit;font-size:.95rem;font-weight:800;cursor:pointer;transition:all .15s;letter-spacing:.3px"
           onmouseover="this.style.background='#FFB300'" onmouseout="this.style.background='#F9A825'">
           Entrar →
         </button>
@@ -292,15 +286,15 @@
       const isGyn = key === 'goiania';
       const btnGyn = document.getElementById('btn-gyn');
       const btnMet = document.getElementById('btn-met');
-      const cor    = isGyn ? '#1565C0' : '#6A1B9A';
-      btnGyn.style.background   = isGyn ? '#1565C0' : 'transparent';
-      btnGyn.style.borderColor  = isGyn ? '#1565C0' : 'rgba(255,255,255,.2)';
-      btnGyn.style.color        = isGyn ? '#fff' : 'rgba(255,255,255,.6)';
-      btnMet.style.background   = !isGyn ? '#6A1B9A' : 'transparent';
-      btnMet.style.borderColor  = !isGyn ? '#6A1B9A' : 'rgba(255,255,255,.2)';
-      btnMet.style.color        = !isGyn ? '#fff' : 'rgba(255,255,255,.6)';
-      document.getElementById('btn-salvar-senha').style.background = cor;
-      document.getElementById('btn-salvar-senha').style.color      = isGyn ? '#0D47A1' : '#fff';
+      btnGyn.style.background  = isGyn ? '#1565C0' : 'transparent';
+      btnGyn.style.borderColor = isGyn ? '#1565C0' : 'rgba(255,255,255,.2)';
+      btnGyn.style.color       = isGyn ? '#fff' : 'rgba(255,255,255,.6)';
+      btnMet.style.background  = !isGyn ? '#6A1B9A' : 'transparent';
+      btnMet.style.borderColor = !isGyn ? '#6A1B9A' : 'rgba(255,255,255,.2)';
+      btnMet.style.color       = !isGyn ? '#fff' : 'rgba(255,255,255,.6)';
+      // Título dinâmico
+      const label = document.getElementById('login-regional-label');
+      if (label) label.textContent = isGyn ? 'Regional Goiânia' : 'Regional Metropolitana';
     }
 
     function toggleSenhaVisivel() {
