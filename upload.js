@@ -87,9 +87,10 @@ function diasRestantesSnap(dc) {
 // BASE HISTÓRICA
 // ============================================================
 async function processHistorico(file) {
+  // Lê o arquivo ANTES de qualquer operação async para evitar NotReadableError
+  const data = await file.arrayBuffer();
   await requestWakeLock();
   setStatus('status-historico', '⏳ Lendo arquivo...', 'loading');
-  const data = await file.arrayBuffer();
   const wb = XLSX.read(data);
   const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
 
@@ -235,9 +236,10 @@ async function processHistorico(file) {
 // OCORRÊNCIAS ATIVAS (Visão Atual)
 // ============================================================
 async function processAtual(file) {
+  // Lê o arquivo ANTES de qualquer operação async para evitar NotReadableError
+  const data = await file.arrayBuffer();
   await requestWakeLock();
   setStatus('status-atual', '⏳ Lendo arquivo...', 'loading');
-  const data = await file.arrayBuffer();
   const wb   = XLSX.read(data);
   const allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:'' });
 
