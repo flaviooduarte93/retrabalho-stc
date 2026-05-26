@@ -330,11 +330,15 @@ function exportarCSV() {
 // ============================================================
 async function calcularEfetividade() {
   // Busca ocorrências de TODAS as fontes para detectar reincidência
-  // 1. Histórico recente (últimos 4 meses)
-  const { data: recentes } = await db
-    .from('historico_recente')
-    .select('uc,dt_inicio,finalizado')
-    .eq('finalizado', true);
+  // 1. Histórico recente (últimos 4 meses) — tabela pode não existir em algumas instâncias
+  let recentes = [];
+  try {
+    const { data: _rec, error: _recErr } = await db
+      .from('historico_recente')
+      .select('uc,dt_inicio,finalizado')
+      .eq('finalizado', true);
+    if (!_recErr) recentes = _rec || [];
+  } catch(e) { console.warn('historico_recente indisponível para efetividade:', e.message); }
 
   // 2. Base histórica (todos os atendimentos do balde)
   async function fetchAll(q) {
@@ -542,6 +546,16 @@ async function carregar() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Popula fiscais do filtro conforme a regional ativa
+  const _selFiscal = document.getElementById('filtro-fiscal');
+  if (_selFiscal) {
+    const _reg = typeof getRegional === 'function' ? getRegional() : null;
+    (_reg?.fiscais || []).forEach(f => {
+      const o = document.createElement('option');
+      o.value = f; o.textContent = f;
+      _selFiscal.appendChild(o);
+    });
+  }
   carregar();
   document.getElementById('btn-refresh')?.addEventListener('click', carregar);
 });
