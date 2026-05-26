@@ -171,8 +171,14 @@ async function processHistorico(file) {
     const hist = Object.values(osMap).sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
     const ultimo = [...hist].sort((a,b)=>(b.data_origem||'')>(a.data_origem||'')?1:-1)[0]||{};
 
+    // Extrai município da primeira linha disponível (campo pode variar por regional)
+    const municipio = registros
+      .map(r => String(r['Município']||r['Municipio']||r['MUNICIPIO']||r['MUNICÍPIO']||'').trim())
+      .find(m => m) || null;
+
     docs.push({
-      uc: sanitizeId(uc),
+      uc:               sanitizeId(uc),
+      municipio:        municipio || null,
       ultima_os:        ultimo.os       ||'----',
       data_origem:      ultimo.data_origem||null,
       data_conc:        ultimo.data_conc  ||null,
