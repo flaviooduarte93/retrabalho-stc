@@ -575,34 +575,9 @@ async function carregar(){
     }).map(h=>({...h,fim90:new Date(new Date(h.data_conc).getTime()+91*86400000)}));
     _lista.sort((a,b)=>diasRestantes(a.data_conc)-diasRestantes(b.data_conc));
 
-    // Busca alimentador diretamente de historico_recente (fonte correta)
-    const _ucsLista = [...new Set(_lista.map(h=>h.uc))];
-    if (_ucsLista.length) {
-      const { data: _recenteAlim, error: _erroAlim } = await db
-        .from('historico_recente')
-        .select('uc,alimentador,mes_ano')
-        .in('uc', _ucsLista)
-        .order('mes_ano', { ascending: false });
-
-      if (_erroAlim) {
-        console.warn('⚠ Erro ao buscar alimentador de historico_recente:', _erroAlim.message);
-        console.warn('→ Execute no Supabase: ALTER TABLE historico_recente ADD COLUMN IF NOT EXISTS alimentador TEXT;');
-      } else {
-        const _alimentMap = {};
-        for (const r of (_recenteAlim||[])) {
-          if (!_alimentMap[r.uc] && r.alimentador) _alimentMap[r.uc] = r.alimentador;
-        }
-        const _totalComAlim = Object.keys(_alimentMap).length;
-        console.log(`ℹ Alimentador: ${_totalComAlim} UCs com dado em historico_recente`);
-        if (!_totalComAlim) {
-          console.warn('→ Nenhum alimentador encontrado. Verifique: (1) coluna existe no Supabase? (2) re-upload do Histórico por Período foi feito?');
-        }
-        _lista = _lista.map(h => ({
-          ...h,
-          alimentador: _alimentMap[h.uc] || h.alimentador || null
-        }));
-      }
-    }
+    // Alimentador vem direto do historico (já populado pelo trigger do Supabase
+    // que sincroniza automaticamente de historico_recente → historico)
+    // Nenhuma query extra necessária — select('*') já traz h.alimentador
 
     const total=_lista.length;
     const critico=_lista.filter(h=>diasRestantes(h.data_conc)<=10).length;
