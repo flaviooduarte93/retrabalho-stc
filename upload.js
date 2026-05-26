@@ -178,7 +178,9 @@ async function processHistorico(file) {
 
     docs.push({
       uc:               sanitizeId(uc),
-      municipio:        municipio || null,
+      // municipio apenas para Metropolitana (coluna não existe em Goiânia)
+      ...(typeof getRegional==='function' && getRegional()?.features?.municipio && municipio
+        ? { municipio } : {}),
       ultima_os:        ultimo.os       ||'----',
       data_origem:      ultimo.data_origem||null,
       data_conc:        ultimo.data_conc  ||null,
