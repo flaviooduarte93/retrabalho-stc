@@ -111,6 +111,26 @@ async function processHistorico(file) {
   const ucKeys = Object.keys(byUC);
   setStatus('status-historico', `⏳ Processando ${ucKeys.length} UCs...`, 'loading');
 
+  // Salva alimentador e municipio ANTES de apagar — serão restaurados no insert
+  const _rc = typeof getRegional === 'function' ? getRegional() : null;
+  const _savedAlim = {}, _savedMuni = {};
+  try {
+    let _page = 0, _savedAll = [];
+    while (true) {
+      const { data: _s } = await db.from('historico').select('uc,alimentador,municipio')
+        .range(_page * 1000, _page * 1000 + 999);
+      if (!_s?.length) break;
+      _savedAll = _savedAll.concat(_s);
+      if (_s.length < 1000) break;
+      _page++;
+    }
+    _savedAll.forEach(h => {
+      if (h.alimentador) _savedAlim[h.uc] = h.alimentador;
+      if (h.municipio)   _savedMuni[h.uc] = h.municipio;
+    });
+    console.log(`ℹ Preservando: ${Object.keys(_savedAlim).length} alimentadores, ${Object.keys(_savedMuni).length} municípios`);
+  } catch(e) { console.warn('Aviso ao salvar alimentador/municipio:', e.message); }
+
   const docs = [];
   for (const uc of ucKeys) {
     const registros = byUC[uc];
@@ -120,28 +140,20 @@ async function processHistorico(file) {
     for (const r of registros) {
       const osAtual  = String(r['OS']||'').trim();
       const osOrigem = String(r['OS_ORIGEM']||'').trim();
-      // Função de deduplicação: extrai número final da OS + mês/ano da data
-      // Ex: "2026-3-6489" com data em março/2026 → chave "2026-03-6489"
-      //     "6489"        com data em março/2026 → chave "2026-03-6489" (mesmo!)
       function chaveOS(osStr, dataStr) {
-        const num = String(osStr||'').trim().replace(/^\d{4}-\d+-/, ''); // pega só o número final
-        if (!dataStr) return osStr; // sem data, usa OS completa como fallback
+        const num = String(osStr||'').trim().replace(/^\d{4}-\d+-/, '');
+        if (!dataStr) return osStr;
         const d = new Date(dataStr);
         if (isNaN(d)) return osStr;
         const mesAno = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
         return `${mesAno}-${num}`;
       }
-
       function duracao(rec) {
         if (!rec.data_origem || !rec.data_conc) return 0;
         return new Date(rec.data_conc) - new Date(rec.data_origem);
       }
-
       function setOsMap(key, rec) {
-        // Se já existe, mantém a de maior duração
-        if (!osMap[key] || duracao(rec) > duracao(osMap[key])) {
-          osMap[key] = rec;
-        }
+        if (!osMap[key] || duracao(rec) > duracao(osMap[key])) osMap[key] = rec;
       }
 
       if (osOrigem) {
@@ -169,20 +181,23 @@ async function processHistorico(file) {
       }
     }
 
-    const hist = Object.values(osMap).sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
+    const hist   = Object.values(osMap).sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
     const ultimo = [...hist].sort((a,b)=>(b.data_origem||'')>(a.data_origem||'')?1:-1)[0]||{};
+    const ucId   = sanitizeId(uc);
 
-    // Extrai município da primeira linha disponível (campo pode variar por regional)
-    const municipio = registros
+    // Município: vem do arquivo (Metropolitana) ou do salvo anteriormente
+    const municipioArquivo = registros
       .map(r => String(r['Município']||r['Municipio']||r['MUNICIPIO']||r['MUNICÍPIO']||'').trim())
       .find(m => m) || null;
+    const municipioFinal = municipioArquivo || _savedMuni[ucId] || null;
 
     docs.push({
-      uc:               sanitizeId(uc),
-      // municipio apenas para Metropolitana (coluna não existe em Goiânia)
-      ...(typeof getRegional==='function' && getRegional()?.features?.municipio && municipio
-        ? { municipio } : {}),
-      ultima_os:        ultimo.os       ||'----',
+      uc:               ucId,
+      // alimentador: preservado do historico anterior (Goiânia)
+      ...(_rc?.features?.alimentador && _savedAlim[ucId] ? { alimentador: _savedAlim[ucId] } : {}),
+      // municipio: do arquivo ou preservado (Metropolitana)
+      ...(_rc?.features?.municipio && municipioFinal ? { municipio: municipioFinal } : {}),
+      ultima_os:        ultimo.os        ||'----',
       data_origem:      ultimo.data_origem||null,
       data_conc:        ultimo.data_conc  ||null,
       prefixo:          ultimo.prefixo   ||'----',
