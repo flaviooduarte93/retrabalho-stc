@@ -407,10 +407,8 @@ function renderLista(lista){
         <div class="dropdown-header-left">
           <div class="dropdown-uc">UC ${h.uc}</div>
           <div class="dropdown-meta">${(()=>{
-            const _rc2=typeof getRegional==='function'?getRegional():null;
-            const _alim=_rc2?.features?.alimentador;
-            if(_alim&&h.alimentador) return `<span style='font-size:.68rem;background:#E3F2FD;color:#1565C0;font-weight:700;padding:1px 8px;border-radius:20px;white-space:nowrap'>⚡ ${h.alimentador}</span> · `;
-            if(h.municipio) return `<span style='font-size:.68rem;color:var(--eq-gray-400);font-weight:600'>${h.municipio}</span> · `;
+            if(h.alimentador) return '<span style=\'font-size:.68rem;background:#E3F2FD;color:#1565C0;font-weight:700;padding:1px 8px;border-radius:20px;white-space:nowrap\'>⚡ '+h.alimentador+'</span> · ';
+            if(h.municipio)   return '<span style=\'font-size:.68rem;color:var(--eq-gray-400);font-weight:600\'>'+h.municipio+'</span> · ';
             return '';
           })()} ${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
           ${badgeInspecao(h.uc)}
@@ -580,20 +578,30 @@ async function carregar(){
     // Busca alimentador diretamente de historico_recente (fonte correta)
     const _ucsLista = [...new Set(_lista.map(h=>h.uc))];
     if (_ucsLista.length) {
-      const { data: _recenteAlim } = await db
+      const { data: _recenteAlim, error: _erroAlim } = await db
         .from('historico_recente')
-        .select('uc,alimentador')
+        .select('uc,alimentador,mes_ano')
         .in('uc', _ucsLista)
-        .not('alimentador', 'is', null)
-        .order('dt_inicio', { ascending: false });
-      const _alimentMap = {};
-      for (const r of (_recenteAlim||[])) {
-        if (!_alimentMap[r.uc] && r.alimentador) _alimentMap[r.uc] = r.alimentador;
+        .order('mes_ano', { ascending: false });
+
+      if (_erroAlim) {
+        console.warn('⚠ Erro ao buscar alimentador de historico_recente:', _erroAlim.message);
+        console.warn('→ Execute no Supabase: ALTER TABLE historico_recente ADD COLUMN IF NOT EXISTS alimentador TEXT;');
+      } else {
+        const _alimentMap = {};
+        for (const r of (_recenteAlim||[])) {
+          if (!_alimentMap[r.uc] && r.alimentador) _alimentMap[r.uc] = r.alimentador;
+        }
+        const _totalComAlim = Object.keys(_alimentMap).length;
+        console.log(`ℹ Alimentador: ${_totalComAlim} UCs com dado em historico_recente`);
+        if (!_totalComAlim) {
+          console.warn('→ Nenhum alimentador encontrado. Verifique: (1) coluna existe no Supabase? (2) re-upload do Histórico por Período foi feito?');
+        }
+        _lista = _lista.map(h => ({
+          ...h,
+          alimentador: _alimentMap[h.uc] || h.alimentador || null
+        }));
       }
-      _lista = _lista.map(h => ({
-        ...h,
-        alimentador: _alimentMap[h.uc] || h.alimentador || null
-      }));
     }
 
     const total=_lista.length;
