@@ -137,6 +137,9 @@ document.addEventListener('DOMContentLoaded', () => {
   carregarStatusBases();
 });
 
+// Expõe para uso externo (index.html chama após login para garantir dados frescos)
+window.carregarStatusBases = carregarStatusBases;
+
 // Função global chamada pelo upload.js e upload-recente.js ao concluir
 window.atualizarStatusBases = function() {
   setTimeout(carregarStatusBases, 500);
