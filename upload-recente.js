@@ -80,8 +80,9 @@ async function limparMesesAntigos() {
 }
 
 async function processarPlanilhaRecente(file, idx, total) {
-  setStatusRecente(`⏳ Lendo arquivo ${idx + 1}/${total}...`, 'loading');
+  // Lê o arquivo ANTES de qualquer operação async para evitar NotReadableError
   const data    = await file.arrayBuffer();
+  setStatusRecente(`⏳ Lendo arquivo ${idx + 1}/${total}...`, 'loading');
   const wb      = XLSX.read(data);
   const allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
 
