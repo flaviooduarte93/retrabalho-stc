@@ -157,7 +157,9 @@ async function processarPlanilhaRecente(file, idx, total) {
       causa:          causaFinal,
       seccional,
       municipio,
-      alimentador,          // ← salvo direto em historico_recente
+      // alimentador apenas para Goiânia (coluna não existe na Metropolitana)
+      ...(typeof getRegional==='function' && getRegional()?.features?.alimentador && alimentador
+        ? { alimentador } : {}),
       mes_ano:        mesAno,
       finalizado,
       ativo,
