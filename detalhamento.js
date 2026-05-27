@@ -68,24 +68,49 @@ function fecharModalDelegar() {
   document.getElementById('modal-delegar').style.display = 'none';
 }
 
-async function cancelarDelegacao(uc) {
+async function cancelarDelegacao(uc, btnEl) {
   const insp = _inspecoesMap[uc];
-  if (!insp?.id) return;
-  if (!confirm(`Cancelar a delegação da UC ${uc} para ${insp.fiscal}?`)) return;
+  if (!insp) return;
+
+  // Primeiro clique → muda para "Confirmar?" (evita window.confirm bloqueado)
+  if (btnEl.dataset.confirming !== '1') {
+    btnEl.dataset.confirming = '1';
+    btnEl.textContent = 'Confirmar?';
+    btnEl.style.background = 'var(--eq-red,#C62828)';
+    btnEl.style.color = '#fff';
+    btnEl.style.borderColor = 'var(--eq-red,#C62828)';
+    // Volta ao estado original após 3 s sem segundo clique
+    setTimeout(() => {
+      if (btnEl.dataset.confirming === '1') {
+        btnEl.dataset.confirming = '0';
+        btnEl.textContent = '✕ Cancelar';
+        btnEl.style.background = '#fff';
+        btnEl.style.color = 'var(--eq-red,#C62828)';
+        btnEl.style.borderColor = 'var(--eq-red,#C62828)';
+      }
+    }, 3000);
+    return;
+  }
+
+  // Segundo clique → executa cancelamento
+  btnEl.textContent = 'Cancelando...';
+  btnEl.disabled = true;
 
   try {
-    const { error } = await db.from('inspecoes').delete().eq('id', insp.id);
+    let error;
+    if (insp.id) {
+      ({ error } = await db.from('inspecoes').delete().eq('id', insp.id));
+    } else {
+      // Fallback: apaga por uc (caso id seja nulo por schema antigo)
+      ({ error } = await db.from('inspecoes').delete().eq('uc', uc));
+    }
     if (error) throw error;
     delete _inspecoesMap[uc];
     aplicarFiltroOrdem();
-    // Atualiza contador de pendentes no stats
-    const pendentesEl = document.querySelector('[data-filtro-insp="pendente"] strong');
-    if (pendentesEl) {
-      const n = Object.values(_inspecoesMap).filter(i=>i.status==='pendente'&&_lista.some(h=>h.uc===i.uc)).length;
-      pendentesEl.textContent = n;
-    }
   } catch(err) {
-    alert(`Erro ao cancelar: ${err.message}`);
+    console.error('Erro ao cancelar delegação:', err);
+    btnEl.textContent = '❌ Erro';
+    setTimeout(() => { aplicarFiltroOrdem(); }, 2000);
   }
 }
 
@@ -195,7 +220,7 @@ function badgeInspecao(uc) {
   }
 
   const btnCancel = i.status === 'pendente'
-    ? `<button class="btn-delegar btn-delegar--cancel" onclick="event.stopPropagation();cancelarDelegacao('${uc}')" style="padding:4px 10px;border-radius:20px;border:1.5px solid var(--eq-red);background:#fff;color:var(--eq-red);font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;transition:all .15s" onmouseover="this.style.background='#FFF5F5'" onmouseout="this.style.background='#fff'">✕ Cancelar</button>`
+    ? `<button class="btn-delegar btn-delegar--cancel" onclick="event.stopPropagation();cancelarDelegacao('${uc}',this)" style="padding:4px 10px;border-radius:20px;border:1.5px solid var(--eq-red,#C62828);background:#fff;color:var(--eq-red,#C62828);font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;transition:all .15s">✕ Cancelar</button>`
     : '';
 
   return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
