@@ -14,7 +14,7 @@ function diasRestantes(dc){if(!dc)return null;return Math.ceil((new Date(new Dat
 function calcPct90(dc){if(!dc)return 0;const ini=new Date(dc),fim=new Date(ini.getTime()+91*86400000),hoje=new Date();if(hoje>=fim)return 100;if(hoje<=ini)return 0;return Math.min(100,Math.round((hoje-ini)/(fim-ini)*100));}
 
 let _lista=[], _criterio='menor-tempo', _filtro='', _filtroCard='todos', _filtroInsp='todos';
-let _paginaAtual=1, _porPagina=20, _filtroMunicipio='', _filtroAlimentador='';
+let _paginaAtual=1, _porPagina=20, _filtroMunicipio='';
 let _histTodos=[], _chartReincidencia=null;
 let _inspecoesMap = {}; // uc → inspecao mais recente
 
@@ -66,6 +66,27 @@ function abrirModalDelegar(uc, dias, dataSaida) {
 
 function fecharModalDelegar() {
   document.getElementById('modal-delegar').style.display = 'none';
+}
+
+async function cancelarDelegacao(uc) {
+  const insp = _inspecoesMap[uc];
+  if (!insp?.id) return;
+  if (!confirm(`Cancelar a delegação da UC ${uc} para ${insp.fiscal}?`)) return;
+
+  try {
+    const { error } = await db.from('inspecoes').delete().eq('id', insp.id);
+    if (error) throw error;
+    delete _inspecoesMap[uc];
+    aplicarFiltroOrdem();
+    // Atualiza contador de pendentes no stats
+    const pendentesEl = document.querySelector('[data-filtro-insp="pendente"] strong');
+    if (pendentesEl) {
+      const n = Object.values(_inspecoesMap).filter(i=>i.status==='pendente'&&_lista.some(h=>h.uc===i.uc)).length;
+      pendentesEl.textContent = n;
+    }
+  } catch(err) {
+    alert(`Erro ao cancelar: ${err.message}`);
+  }
 }
 
 function toggleAcao() {
@@ -173,11 +194,16 @@ function badgeInspecao(uc) {
     </div>`;
   }
 
+  const btnCancel = i.status === 'pendente'
+    ? `<button class="btn-delegar btn-delegar--cancel" onclick="event.stopPropagation();cancelarDelegacao('${uc}')" style="padding:4px 10px;border-radius:20px;border:1.5px solid var(--eq-red);background:#fff;color:var(--eq-red);font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;transition:all .15s" onmouseover="this.style.background='#FFF5F5'" onmouseout="this.style.background='#fff'">✕ Cancelar</button>`
+    : '';
+
   return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
     <span style="font-size:.72rem;font-weight:700;color:${cores[i.status]}">${icons[i.status]} ${labels[i.status]}</span>
     ${i.acao ? `<span style="font-size:.7rem;color:var(--eq-gray-500)">${acaoLabel}</span>` : ''}
     <span style="font-size:.7rem;color:var(--eq-gray-400)">— ${i.fiscal}</span>
     ${btnDel}
+    ${btnCancel}
   </div>`;
 }
 
@@ -187,12 +213,6 @@ function badgeInspecao(uc) {
 function filtrarMunicipio(v) {
   _paginaAtual = 1;
   _filtroMunicipio = v;
-  aplicarFiltroOrdem();
-}
-
-function filtrarAlimentador(v) {
-  _paginaAtual = 1;
-  _filtroAlimentador = v;
   aplicarFiltroOrdem();
 }
 
@@ -406,11 +426,7 @@ function renderLista(lista){
       <div class="dropdown-header" onclick="toggleDropdown('${uid}')">
         <div class="dropdown-header-left">
           <div class="dropdown-uc">UC ${h.uc}</div>
-          <div class="dropdown-meta">${(()=>{
-            if(h.alimentador) return '<span style=\'font-size:.68rem;background:#E3F2FD;color:#1565C0;font-weight:700;padding:1px 8px;border-radius:20px;white-space:nowrap\'>⚡ '+h.alimentador+'</span> · ';
-            if(h.municipio)   return '<span style=\'font-size:.68rem;color:var(--eq-gray-400);font-weight:600\'>'+h.municipio+'</span> · ';
-            return '';
-          })()} ${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
+          <div class="dropdown-meta">${h.municipio?`<span style='font-size:.68rem;color:var(--eq-gray-400);font-weight:600'>${h.municipio}</span> · `:''} ${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
           ${badgeInspecao(h.uc)}
         </div>
         <div class="dropdown-header-right">
@@ -440,8 +456,7 @@ function listaFiltrada(){
   else if(_filtroCard==='alerta') lista=lista.filter(h=>{const d=diasRestantes(h.data_conc);return d>10&&d<=30;});
   else if(_filtroCard==='ok') lista=lista.filter(h=>diasRestantes(h.data_conc)>30);
   if(_filtro.trim()) lista=lista.filter(h=>h.uc.toLowerCase().includes(_filtro.trim().toLowerCase()));
-  if(_filtroMunicipio)   lista=lista.filter(h=>h.municipio===_filtroMunicipio);
-  if(_filtroAlimentador) lista=lista.filter(h=>h.alimentador===_filtroAlimentador);
+  if(_filtroMunicipio) lista=lista.filter(h=>h.municipio===_filtroMunicipio);
   // Filtro por status de inspeção
   if(_filtroInsp === 'delegadas') lista=lista.filter(h=>!!_inspecoesMap[h.uc]);
   else if(_filtroInsp === 'ok')              lista=lista.filter(h=>_inspecoesMap[h.uc]?.status==='ok');
@@ -548,26 +563,14 @@ async function carregar(){
   try {
     async function fetchAll(query){
       let all=[],page=0;
-      while(true){
-        const{data,error}=await query.range(page*1000,page*1000+999);
-        if(error||!data||!data.length)break;
-        all=all.concat(data);
-        if(data.length<1000)break;
-        page++;
-      }
+      while(true){const{data}=await query.range(page*1000,page*1000+999);if(!data||!data.length)break;all=all.concat(data);if(data.length<1000)break;page++;}
       return all;
-    }
-
-    // inspecoes pode não existir em algumas instâncias regionais — trata silenciosamente
-    async function fetchInspecoes(){
-      try { return await fetchAll(db.from('inspecoes').select('*').order('delegado_em',{ascending:false})); }
-      catch(e){ console.warn('Tabela inspecoes indisponível:', e.message); return []; }
     }
 
     const [ativas, hist, inspecoes] = await Promise.all([
       fetchAll(db.from('visao_atual').select('uc,em_historico')),
       fetchAll(db.from('historico').select('*')),
-      fetchInspecoes(),
+      fetchAll(db.from('inspecoes').select('*').order('delegado_em',{ascending:false})),
     ]);
 
     // Monta mapa de inspeções — mantém só a mais recente por UC
@@ -587,32 +590,11 @@ async function carregar(){
     }).map(h=>({...h,fim90:new Date(new Date(h.data_conc).getTime()+91*86400000)}));
     _lista.sort((a,b)=>diasRestantes(a.data_conc)-diasRestantes(b.data_conc));
 
-    // Alimentador vem direto do historico (já populado pelo trigger do Supabase
-    // que sincroniza automaticamente de historico_recente → historico)
-    // Nenhuma query extra necessária — select('*') já traz h.alimentador
-
     const total=_lista.length;
     const critico=_lista.filter(h=>diasRestantes(h.data_conc)<=10).length;
     const alerta=_lista.filter(h=>{const d=diasRestantes(h.data_conc);return d>10&&d<=30;}).length;
     const ok=_lista.filter(h=>diasRestantes(h.data_conc)>30).length;
     const delegadas=Object.keys(_inspecoesMap).filter(uc=>_lista.some(h=>h.uc===uc)).length;
-
-    // Dropdown alimentador/município — pré-computado para evitar template literal aninhado
-    const _rcDrop   = typeof getRegional==='function' ? getRegional() : null;
-    const _useAlim  = _rcDrop?.features?.alimentador;
-    const _valsDrop = _useAlim
-      ? [...new Set(_lista.map(h=>h.alimentador).filter(Boolean))].sort()
-      : [...new Set(_lista.map(h=>h.municipio).filter(Boolean))].sort();
-    const _lblDrop  = _useAlim ? 'Alimentador' : 'Município';
-    const _fnDrop   = _useAlim ? 'filtrarAlimentador' : 'filtrarMunicipio';
-    const _optsDrop = _valsDrop.map(v=>'<option value="'+v+'">'+v+'</option>').join('');
-    const _dropdownHtml = _valsDrop.length
-      ? '<div style="display:flex;align-items:center;gap:8px">'
-        + '<label style="font-size:.75rem;color:var(--eq-gray-500);font-weight:600;white-space:nowrap">'+_lblDrop+':</label>'
-        + '<select id="sel-alimentador-mun" class="filtro-select" style="font-size:.8rem;padding:6px 10px;min-width:160px" onchange="'+_fnDrop+'(this.value)">'
-        + '<option value="">Todos</option>'+_optsDrop
-        + '</select></div>'
-      : '';
 
     document.getElementById('stats-det').innerHTML=`
       <div class="alert-stats" style="margin-bottom:24px">
@@ -630,25 +612,23 @@ async function carregar(){
         </div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <span style="font-size:.75rem;color:var(--eq-gray-400)">Filtrar por inspeção:</span>
-          <button class="insp-badge-btn" data-filtro-insp="delegadas" onclick="filtrarInsp('delegadas')">
-            👁 <strong>${delegadas}</strong> Delegadas
-          </button>
-          <button class="insp-badge-btn insp-ok" data-filtro-insp="ok" onclick="filtrarInsp('ok')">
-            ✅ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='ok'&&_lista.some(h=>h.uc===i.uc)).length}</strong> OK
-          </button>
-          <button class="insp-badge-btn insp-acao" data-filtro-insp="acao_necessaria" onclick="filtrarInsp('acao_necessaria')">
-            ⚠ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='acao_necessaria'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Ação necessária
-          </button>
-          <button class="insp-badge-btn insp-pendente" data-filtro-insp="pendente" onclick="filtrarInsp('pendente')">
-            ⏳ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='pendente'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Pendentes
-          </button>
-          <button class="insp-badge-btn insp-sem" data-filtro-insp="sem_inspecao" onclick="filtrarInsp('sem_inspecao')">
-            — <strong>${_lista.filter(h=>!_inspecoesMap[h.uc]).length}</strong> Sem inspeção
-          </button>
-        </div>
-        ${_dropdownHtml}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+        <span style="font-size:.75rem;color:var(--eq-gray-400)">Filtrar por inspeção:</span>
+        <button class="insp-badge-btn" data-filtro-insp="delegadas" onclick="filtrarInsp('delegadas')">
+          👁 <strong>${delegadas}</strong> Delegadas
+        </button>
+        <button class="insp-badge-btn insp-ok" data-filtro-insp="ok" onclick="filtrarInsp('ok')">
+          ✅ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='ok'&&_lista.some(h=>h.uc===i.uc)).length}</strong> OK
+        </button>
+        <button class="insp-badge-btn insp-acao" data-filtro-insp="acao_necessaria" onclick="filtrarInsp('acao_necessaria')">
+          ⚠ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='acao_necessaria'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Ação necessária
+        </button>
+        <button class="insp-badge-btn insp-pendente" data-filtro-insp="pendente" onclick="filtrarInsp('pendente')">
+          ⏳ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='pendente'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Pendentes
+        </button>
+        <button class="insp-badge-btn insp-sem" data-filtro-insp="sem_inspecao" onclick="filtrarInsp('sem_inspecao')">
+          — <strong>${_lista.filter(h=>!_inspecoesMap[h.uc]).length}</strong> Sem inspeção
+        </button>
       </div>`;
 
     document.getElementById('det-container').innerHTML=`
