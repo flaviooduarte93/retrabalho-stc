@@ -1,6 +1,6 @@
 // js/detalhamento.js
 
-const FISCAIS = (typeof getRegional === 'function' ? getRegional().fiscais : ['Hugo Leonardo','Rogério Machado','Cainan Ataides','Francisco Pereira','Paulo Henrique', 'Elcop']);
+const FISCAIS = (typeof getRegional === 'function' ? getRegional().fiscais : ['Hugo Leonardo','Rogério Machado','Cainan Ataides','Francisco Pereira','Paulo Henrique']);
 const ACOES   = [
   { value: 'troca_conector', label: 'Troca de conector' },
   { value: 'troca_ramal',    label: 'Troca do ramal' },
@@ -17,6 +17,93 @@ let _lista=[], _criterio='menor-tempo', _filtro='', _filtroCard='todos', _filtro
 let _paginaAtual=1, _porPagina=20, _filtroMunicipio='';
 let _histTodos=[], _chartReincidencia=null;
 let _inspecoesMap = {}; // uc → inspecao mais recente
+let _bulkMode     = false;
+let _selectedUCs  = new Set();
+
+// ============================================================
+// DELEGAÇÃO EM MASSA
+// ============================================================
+function inicializarBulkBar() {
+  if (document.getElementById('bulk-bar')) return;
+  const bar = document.createElement('div');
+  bar.id = 'bulk-bar';
+  bar.style.cssText = 'display:none;position:fixed;bottom:0;left:0;right:0;background:var(--eq-blue,#1565C0);color:#fff;padding:12px 16px;z-index:500;align-items:center;gap:12px;flex-wrap:wrap;box-shadow:0 -4px 20px rgba(0,0,0,.2);';
+  bar.innerHTML = `
+    <span id="bulk-count" style="font-size:.85rem;font-weight:700;white-space:nowrap">0 UC(s) selecionada(s)</span>
+    <select id="bulk-fiscal" style="padding:8px 12px;border-radius:8px;border:none;font-family:inherit;font-size:.85rem;min-width:180px;flex:1;max-width:300px">
+      <option value="">Selecione o fiscal...</option>
+    </select>
+    <button onclick="salvarDelegacaoEmMassa()" style="padding:8px 18px;border-radius:8px;border:none;background:#F9A825;color:#fff;font-weight:700;font-family:inherit;cursor:pointer;font-size:.85rem;white-space:nowrap">👁 Delegar selecionadas</button>
+    <button onclick="toggleBulkMode(false)" style="padding:8px 14px;border-radius:8px;border:1.5px solid rgba(255,255,255,.4);background:transparent;color:#fff;font-family:inherit;cursor:pointer;font-size:.85rem;white-space:nowrap">✕ Cancelar</button>`;
+  document.body.appendChild(bar);
+}
+
+function toggleBulkMode(ativo) {
+  _bulkMode = ativo !== undefined ? ativo : !_bulkMode;
+  _selectedUCs.clear();
+  inicializarBulkBar();
+  const bar = document.getElementById('bulk-bar');
+  if (_bulkMode) {
+    // Popula fiscais no dropdown do bulk bar
+    const sel = document.getElementById('bulk-fiscal');
+    if (sel) {
+      const reg = typeof getRegional==='function' ? getRegional() : null;
+      const fiscais = reg?.fiscais || [];
+      sel.innerHTML = '<option value="">Selecione o fiscal...</option>'
+        + fiscais.map(f => `<option value="${f}">${f}</option>`).join('');
+    }
+    bar.style.display = 'flex';
+    // Padding no bottom da página para o bar não cobrir os cards
+    document.querySelector('.page-main')?.style.setProperty('padding-bottom','70px');
+  } else {
+    bar.style.display = 'none';
+    document.querySelector('.page-main')?.style.setProperty('padding-bottom','');
+  }
+  aplicarFiltroOrdem();
+}
+
+function toggleUCSelect(uc, checked) {
+  if (checked) _selectedUCs.add(uc); else _selectedUCs.delete(uc);
+  const countEl = document.getElementById('bulk-count');
+  if (countEl) countEl.textContent = `${_selectedUCs.size} UC(s) selecionada(s)`;
+}
+
+async function salvarDelegacaoEmMassa() {
+  if (!_selectedUCs.size) { alert('Selecione ao menos uma UC.'); return; }
+  const fiscal = document.getElementById('bulk-fiscal')?.value;
+  if (!fiscal) { alert('Selecione um fiscal.'); return; }
+
+  const btn = document.querySelector('#bulk-bar button[onclick="salvarDelegacaoEmMassa()"]');
+  if (btn) { btn.textContent = 'Salvando...'; btn.disabled = true; }
+
+  const ucs = [..._selectedUCs];
+  const erros = [];
+  for (const uc of ucs) {
+    try {
+      const existente = _inspecoesMap[uc];
+      const payload = { uc, fiscal, status: 'pendente', acao: null, observacao: null,
+        dias_restantes: null, data_saida: null, inspecionado_em: null };
+      if (existente?.id) {
+        const { error } = await db.from('inspecoes').update(payload).eq('id', existente.id);
+        if (error) throw error;
+      } else {
+        const { error } = await db.from('inspecoes').insert({ ...payload, delegado_em: new Date().toISOString() });
+        if (error) throw error;
+      }
+      _inspecoesMap[uc] = { ...existente, ...payload };
+    } catch(e) { erros.push(uc); console.error('Erro bulk UC', uc, e); }
+  }
+
+  if (btn) { btn.textContent = '👁 Delegar selecionadas'; btn.disabled = false; }
+
+  if (erros.length) {
+    alert(`${ucs.length - erros.length} delegadas com sucesso. Erros em: ${erros.join(', ')}`);
+  } else {
+    // Fecha bulk mode e atualiza lista
+    toggleBulkMode(false);
+    aplicarFiltroOrdem();
+  }
+}
 
 // ============================================================
 // MODAL DE DELEGAÇÃO
@@ -447,12 +534,21 @@ function renderLista(lista){
     const hist=(h.historico||[]).sort((a,b)=>(a.data_origem||'')>(b.data_origem||'')?1:-1);
     const rows=hist.map((at,i)=>`<tr><td><span class="atend-num-badge">${i+1}</span></td><td><strong>${at.os||'----'}</strong></td><td>${fmtDate(at.data_origem)}</td><td>${fmtDate(at.data_conc)}</td><td>${at.prefixo||'----'}</td><td>${at.causa||'----'}</td><td>${badgeProcedencia(at.causa)}</td></tr>`).join('');
     const dataSaida = fmtDateShort(h.fim90.toISOString());
+    const bulkCheck = _bulkMode
+      ? `<label onclick="event.stopPropagation()" style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-right:8px;flex-shrink:0">
+          <input type="checkbox" style="width:18px;height:18px;accent-color:var(--eq-blue,#1565C0);cursor:pointer"
+            ${_selectedUCs.has(h.uc)?'checked':''}
+            onchange="toggleUCSelect('${h.uc}',this.checked)">
+         </label>` : '';
     return `<div class="dropdown-item" id="item_${uid}">
-      <div class="dropdown-header" onclick="toggleDropdown('${uid}')">
-        <div class="dropdown-header-left">
+      <div class="dropdown-header" onclick="${_bulkMode?'':"toggleDropdown('"+uid+"')"}">
+        <div class="dropdown-header-left" style="display:flex;align-items:flex-start">
+          ${bulkCheck}
+          <div>
           <div class="dropdown-uc">UC ${h.uc}</div>
           <div class="dropdown-meta">${h.municipio?`<span style='font-size:.68rem;color:var(--eq-gray-400);font-weight:600'>${h.municipio}</span> · `:''} ${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
           ${badgeInspecao(h.uc)}
+          </div>
         </div>
         <div class="dropdown-header-right">
           <div class="dropdown-progress">
@@ -703,6 +799,7 @@ async function carregar(){
           <span class="filtro-count" id="filtro-count"></span>
         </div>
         <div class="sort-group">
+          <button id="btn-bulk-toggle" class="sort-btn" onclick="toggleBulkMode()" style="background:var(--eq-blue-pale,#EFF6FF);color:var(--eq-blue,#1565C0);border-color:var(--eq-blue,#1565C0)">☑ Delegar em massa</button>
           <span class="sort-label">Ordenar:</span>
           <button id="sort-menor-tempo" class="sort-btn sort-btn--active" onclick="ordenarLista('menor-tempo')">⏱ Menor tempo</button>
           <button id="sort-maior-tempo" class="sort-btn" onclick="ordenarLista('maior-tempo')">📅 Maior tempo</button>
