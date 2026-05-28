@@ -13,7 +13,7 @@ const REGIONAIS = {
       'Cainan Ataides',
       'Francisco Pereira',
       'Paulo Henrique',
-      'Elcop'
+      'Elcop',
     ],
     features: {
       alimentador: true,   // rastrea alimentador por UC
