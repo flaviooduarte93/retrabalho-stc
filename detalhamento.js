@@ -588,8 +588,19 @@ async function carregar(){
   try {
     async function fetchAll(query){
       let all=[],page=0;
-      while(true){const{data}=await query.range(page*1000,page*1000+999);if(!data||!data.length)break;all=all.concat(data);if(data.length<1000)break;page++;}
+      while(true){
+        const{data,error}=await query.range(page*1000,page*1000+999);
+        if(error||!data||!data.length)break;
+        all=all.concat(data);
+        if(data.length<1000)break;
+        page++;
+      }
       return all;
+    }
+
+    async function fetchInspecoes(){
+      try { return await fetchAll(db.from('inspecoes').select('*').order('delegado_em',{ascending:false})); }
+      catch(e){ console.warn('Tabela inspecoes indisponível:', e.message); return []; }
     }
 
     const [ativas, hist, inspecoes] = await Promise.all([
