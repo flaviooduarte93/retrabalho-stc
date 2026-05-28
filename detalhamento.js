@@ -594,16 +594,36 @@ async function carregar(){
 
     const [ativas, hist, inspecoes] = await Promise.all([
       fetchAll(db.from('visao_atual').select('uc,em_historico')),
-      // Seleciona colunas exatas por regional (evita 400 por coluna inexistente)
-      fetchAll(db.from('historico').select(
-        (typeof getRegional==='function' && getRegional()?.features?.alimentador)
-          ? 'uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico,alimentador'
-          : (typeof getRegional==='function' && getRegional()?.features?.municipio)
-            ? 'uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico,municipio'
-            : 'uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico'
-      )),
-      fetchAll(db.from('inspecoes').select('*').order('delegado_em',{ascending:false})),
+      fetchAll(db.from('historico').select('uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico')),
+      fetchInspecoes(),
     ]);
+
+    // Carrega alimentador/municipio via RPC — bypassa schema cache do PostgREST
+    const _rc = typeof getRegional==='function' ? getRegional() : null;
+    if (_rc?.features?.alimentador) {
+      try {
+        const { data: _alimData, error: _alimErr } = await db.rpc('get_alimentadores_historico');
+        if (!_alimErr && _alimData?.length) {
+          const _alimMap = {};
+          _alimData.forEach(r => { if (r.alimentador) _alimMap[r.uc] = r.alimentador; });
+          hist.forEach(h => { h.alimentador = _alimMap[h.uc] || null; });
+          console.log('✅ Alimentador via RPC:', Object.keys(_alimMap).length, 'UCs');
+        } else if (_alimErr) {
+          console.warn('RPC get_alimentadores_historico não encontrada — crie a função no Supabase Goiânia.');
+        }
+      } catch(e) { console.warn('Alimentador RPC erro:', e.message); }
+    } else if (_rc?.features?.municipio) {
+      // Metropolitana: municipio já vem no select padrão se a coluna existir
+      // Tenta buscar via query simples (municipio está no schema desde o inicio)
+      try {
+        const { data: _muniData } = await db.from('historico').select('uc,municipio').not('municipio','is',null);
+        if (_muniData?.length) {
+          const _muniMap = {};
+          _muniData.forEach(r => { if (r.municipio) _muniMap[r.uc] = r.municipio; });
+          hist.forEach(h => { h.municipio = _muniMap[h.uc] || null; });
+        }
+      } catch(e) { console.warn('Municipio query erro:', e.message); }
+    }
 
     // Monta mapa de inspeções — mantém só a mais recente por UC
     _inspecoesMap = {};
