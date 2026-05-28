@@ -1,6 +1,6 @@
 // js/detalhamento.js
 
-const FISCAIS = (typeof getRegional === 'function' ? getRegional().fiscais : ['Hugo Leonardo','Rogério Machado','Cainan Ataides','Francisco Pereira','Paulo Henrique']);
+const FISCAIS = (typeof getRegional === 'function' ? getRegional().fiscais : ['Hugo Leonardo','Rogério Machado','Cainan Ataides','Francisco Pereira','Paulo Henrique', 'Elcop']);
 const ACOES   = [
   { value: 'troca_conector', label: 'Troca de conector' },
   { value: 'troca_ramal',    label: 'Troca do ramal' },
