@@ -594,7 +594,14 @@ async function carregar(){
 
     const [ativas, hist, inspecoes] = await Promise.all([
       fetchAll(db.from('visao_atual').select('uc,em_historico')),
-      fetchAll(db.from('historico').select('uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico,alimentador,municipio')),
+      // Seleciona colunas exatas por regional (evita 400 por coluna inexistente)
+      fetchAll(db.from('historico').select(
+        (typeof getRegional==='function' && getRegional()?.features?.alimentador)
+          ? 'uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico,alimentador'
+          : (typeof getRegional==='function' && getRegional()?.features?.municipio)
+            ? 'uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico,municipio'
+            : 'uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico'
+      )),
       fetchAll(db.from('inspecoes').select('*').order('delegado_em',{ascending:false})),
     ]);
 
