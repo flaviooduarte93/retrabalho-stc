@@ -609,31 +609,39 @@ async function carregar(){
       fetchInspecoes(),
     ]);
 
-    // Carrega alimentador/municipio via RPC — bypassa schema cache do PostgREST
-    const _rc = typeof getRegional==='function' ? getRegional() : null;
+    // Carrega alimentador/municipio — mapa externo usado no .map() de _lista
+    const _rc       = typeof getRegional==='function' ? getRegional() : null;
+    const _alimMap  = {};  // uc → alimentador (Goiânia)
+    const _muniMap  = {};  // uc → municipio   (Metropolitana)
+
     if (_rc?.features?.alimentador) {
       try {
-        const { data: _alimData, error: _alimErr } = await db.rpc('get_alimentadores_historico');
-        if (!_alimErr && _alimData?.length) {
-          const _alimMap = {};
-          _alimData.forEach(r => { if (r.alimentador) _alimMap[r.uc] = r.alimentador; });
-          hist.forEach(h => { h.alimentador = _alimMap[h.uc] || null; });
-          console.log('✅ Alimentador via RPC:', Object.keys(_alimMap).length, 'UCs');
-        } else if (_alimErr) {
-          console.warn('RPC get_alimentadores_historico não encontrada — crie a função no Supabase Goiânia.');
+        // Pagina o RPC para garantir todos os registros (padrão Supabase: 1000/req)
+        let _alimPage = 0, _alimAll = [];
+        while (true) {
+          const { data: _d, error: _e } = await db.rpc('get_alimentadores_historico', {}, { count: 'exact' });
+          if (_e) { console.warn('RPC alimentador erro:', _e.message); break; }
+          if (!_d?.length) break;
+          _alimAll = _alimAll.concat(_d);
+          if (_d.length < 1000) break;
+          _alimPage++;
         }
+        _alimAll.forEach(r => { if (r.alimentador) _alimMap[r.uc] = r.alimentador; });
+        console.log('✅ Alimentador via RPC:', Object.keys(_alimMap).length, 'UCs');
       } catch(e) { console.warn('Alimentador RPC erro:', e.message); }
     } else if (_rc?.features?.municipio) {
-      // Metropolitana: municipio já vem no select padrão se a coluna existir
-      // Tenta buscar via query simples (municipio está no schema desde o inicio)
       try {
-        const { data: _muniData } = await db.from('historico').select('uc,municipio').not('municipio','is',null);
-        if (_muniData?.length) {
-          const _muniMap = {};
-          _muniData.forEach(r => { if (r.municipio) _muniMap[r.uc] = r.municipio; });
-          hist.forEach(h => { h.municipio = _muniMap[h.uc] || null; });
+        let _muniPage = 0;
+        while (true) {
+          const { data: _d } = await db.from('historico').select('uc,municipio')
+            .not('municipio','is',null).range(_muniPage*1000, _muniPage*1000+999);
+          if (!_d?.length) break;
+          _d.forEach(r => { if (r.municipio) _muniMap[r.uc] = r.municipio; });
+          if (_d.length < 1000) break;
+          _muniPage++;
         }
-      } catch(e) { console.warn('Municipio query erro:', e.message); }
+        console.log('✅ Município:', Object.keys(_muniMap).length, 'UCs');
+      } catch(e) { console.warn('Municipio erro:', e.message); }
     }
 
     // Monta mapa de inspeções — mantém só a mais recente por UC
@@ -650,8 +658,15 @@ async function carregar(){
       if(!h.data_conc)return false;
       const fim90=new Date(new Date(h.data_conc).getTime()+91*86400000);
       return fim90>hoje&&!ucsComAlerta.has(h.uc);
-    }).map(h=>({...h,fim90:new Date(new Date(h.data_conc).getTime()+91*86400000)}));
+    }).map(h=>({
+      ...h,
+      // Alimentador/municipio injetados explicitamente no map (evita problema de mutação)
+      alimentador: _alimMap[h.uc] || h.alimentador || null,
+      municipio:   _muniMap[h.uc] || h.municipio   || null,
+      fim90: new Date(new Date(h.data_conc).getTime()+91*86400000)
+    }));
     _lista.sort((a,b)=>diasRestantes(a.data_conc)-diasRestantes(b.data_conc));
+    console.log('_lista sample:', _lista[0]?.uc, '| alimentador:', _lista[0]?.alimentador, '| municipio:', _lista[0]?.municipio);
 
     const total=_lista.length;
     const critico=_lista.filter(h=>diasRestantes(h.data_conc)<=10).length;
