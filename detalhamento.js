@@ -616,30 +616,15 @@ async function carregar(){
 
     if (_rc?.features?.alimentador) {
       try {
-        // Pagina o RPC para garantir todos os registros (padrão Supabase: 1000/req)
-        let _alimPage = 0, _alimAll = [];
-        while (true) {
-          const { data: _d, error: _e } = await db.rpc('get_alimentadores_historico', {}, { count: 'exact' });
-          if (_e) { console.warn('RPC alimentador erro:', _e.message); break; }
-          if (!_d?.length) break;
-          _alimAll = _alimAll.concat(_d);
-          if (_d.length < 1000) break;
-          _alimPage++;
-        }
+        // fetchAll suporta paginação via .range() — funciona com RPC também
+        const _alimAll = await fetchAll(db.rpc('get_alimentadores_historico'));
         _alimAll.forEach(r => { if (r.alimentador) _alimMap[r.uc] = r.alimentador; });
         console.log('✅ Alimentador via RPC:', Object.keys(_alimMap).length, 'UCs');
       } catch(e) { console.warn('Alimentador RPC erro:', e.message); }
     } else if (_rc?.features?.municipio) {
       try {
-        let _muniPage = 0;
-        while (true) {
-          const { data: _d } = await db.from('historico').select('uc,municipio')
-            .not('municipio','is',null).range(_muniPage*1000, _muniPage*1000+999);
-          if (!_d?.length) break;
-          _d.forEach(r => { if (r.municipio) _muniMap[r.uc] = r.municipio; });
-          if (_d.length < 1000) break;
-          _muniPage++;
-        }
+        const _muniAll = await fetchAll(db.from('historico').select('uc,municipio').not('municipio','is',null));
+        _muniAll.forEach(r => { if (r.municipio) _muniMap[r.uc] = r.municipio; });
         console.log('✅ Município:', Object.keys(_muniMap).length, 'UCs');
       } catch(e) { console.warn('Municipio erro:', e.message); }
     }
