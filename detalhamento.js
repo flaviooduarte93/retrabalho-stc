@@ -594,7 +594,7 @@ async function carregar(){
 
     const [ativas, hist, inspecoes] = await Promise.all([
       fetchAll(db.from('visao_atual').select('uc,em_historico')),
-      fetchAll(db.from('historico').select('*')),
+      fetchAll(db.from('historico').select('uc,ultima_os,data_origem,data_conc,prefixo,causa,qtd_atendimentos,historico,alimentador,municipio,alimentador_log')),
       fetchAll(db.from('inspecoes').select('*').order('delegado_em',{ascending:false})),
     ]);
 
