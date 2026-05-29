@@ -545,7 +545,14 @@ function renderLista(lista){
         <div class="dropdown-header-left" style="display:flex;align-items:flex-start">
           ${bulkCheck}
           <div>
-          <div class="dropdown-uc">UC ${h.uc}</div>
+          <div class="dropdown-uc" style="display:flex;align-items:center;gap:8px">
+            UC ${h.uc}
+            <button onclick="event.stopPropagation();copiarUC('${h.uc}',this)"
+              style="padding:2px 8px;border-radius:6px;border:1px solid var(--eq-gray-200,#e2e8f0);background:#fff;font-size:.68rem;font-weight:600;color:var(--eq-gray-500,#64748b);cursor:pointer;line-height:1.6;transition:all .15s"
+              onmouseover="this.style.background='#F0F7FF';this.style.color='var(--eq-blue,#1565C0)'"
+              onmouseout="this.style.background='#fff';this.style.color='var(--eq-gray-500,#64748b)'"
+              title="Copiar número da UC">⎘</button>
+          </div>
           <div class="dropdown-meta">${h.municipio?`<span style='font-size:.68rem;color:var(--eq-gray-400);font-weight:600'>${h.municipio}</span> · `:''} ${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
           ${badgeInspecao(h.uc)}
           </div>
@@ -640,6 +647,29 @@ function filtrarCard(tipo){
   _filtroCard=_filtroCard===tipo?'todos':tipo;
   document.querySelectorAll('.stat-card[data-filtro]').forEach(el=>{el.classList.toggle('stat-card--active',el.dataset.filtro===_filtroCard);});
   aplicarFiltroOrdem();
+}
+
+function copiarUC(uc, btnEl) {
+  navigator.clipboard.writeText(uc).then(() => {
+    const orig = btnEl.textContent;
+    btnEl.textContent = '✓';
+    btnEl.style.color  = 'var(--eq-green,#2E7D32)';
+    btnEl.style.background = '#F0FDF4';
+    setTimeout(() => {
+      btnEl.textContent = '⎘';
+      btnEl.style.color = 'var(--eq-gray-500,#64748b)';
+      btnEl.style.background = '#fff';
+    }, 1500);
+  }).catch(() => {
+    // fallback para browsers sem clipboard API
+    const el = document.createElement('textarea');
+    el.value = uc; el.style.position = 'fixed'; el.style.opacity = '0';
+    document.body.appendChild(el); el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+    btnEl.textContent = '✓';
+    setTimeout(() => { btnEl.textContent = '⎘'; }, 1500);
+  });
 }
 
 function filtrarUC(v){_paginaAtual=1;_filtro=v;const c=document.getElementById('filtro-clear');if(c)c.style.display=v?'flex':'none';aplicarFiltroOrdem();}
