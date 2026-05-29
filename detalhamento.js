@@ -553,7 +553,7 @@ function renderLista(lista){
               onmouseout="this.style.background='#fff';this.style.color='var(--eq-gray-500,#64748b)'"
               title="Copiar número da UC">⎘</button>
           </div>
-          <div class="dropdown-meta">${h.municipio?`<span style='font-size:.68rem;color:var(--eq-gray-400);font-weight:600'>${h.municipio}</span> · `:''} ${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
+          <div class="dropdown-meta">${h.alimentador?`<span style='font-size:.68rem;background:#E3F2FD;color:#1565C0;font-weight:700;padding:1px 8px;border-radius:20px;white-space:nowrap'>⚡ ${h.alimentador}</span> · `:h.municipio?`<span style='font-size:.68rem;color:var(--eq-gray-400);font-weight:600'>${h.municipio}</span> · `:''} ${h.qtd_atendimentos||1} atend. · OS: <strong>${h.ultima_os||'----'}</strong> · <strong>${h.prefixo||'----'}</strong><br><span style="margin-top:4px;display:inline-block">${badgeProcedencia(h.causa)}</span></div>
           ${badgeInspecao(h.uc)}
           </div>
         </div>
@@ -785,6 +785,23 @@ async function carregar(){
     const ok=_lista.filter(h=>diasRestantes(h.data_conc)>30).length;
     const delegadas=Object.keys(_inspecoesMap).filter(uc=>_lista.some(h=>h.uc===uc)).length;
 
+    // Dropdown filtro alimentador (Goiânia) ou municipio (Metropolitana)
+    const _rcDrop   = typeof getRegional==='function' ? getRegional() : null;
+    const _useAlim  = _rcDrop?.features?.alimentador;
+    const _valsDrop = _useAlim
+      ? [...new Set(_lista.map(h=>h.alimentador).filter(Boolean))].sort()
+      : [...new Set(_lista.map(h=>h.municipio).filter(Boolean))].sort();
+    const _lblDrop  = _useAlim ? 'Alimentador' : 'Município';
+    const _fnDrop   = _useAlim ? 'filtrarAlimentador' : 'filtrarMunicipio';
+    const _optsDrop = _valsDrop.map(v=>'<option value="'+v+'">'+v+'</option>').join('');
+    const _dropdownHtml = _valsDrop.length
+      ? '<div style="display:flex;align-items:center;gap:8px">'
+        + '<label style="font-size:.75rem;color:var(--eq-gray-500);font-weight:600;white-space:nowrap">'+_lblDrop+':</label>'
+        + '<select id="sel-alimentador-mun" class="filtro-select" style="font-size:.8rem;padding:6px 10px;min-width:160px" onchange="'+_fnDrop+'(this.value)">'
+        + '<option value="">Todos</option>'+_optsDrop
+        + '</select></div>'
+      : '';
+
     document.getElementById('stats-det').innerHTML=`
       <div class="alert-stats" style="margin-bottom:24px">
         <div class="stat-card info" data-filtro="todos" onclick="filtrarCard('todos')" style="cursor:pointer">
@@ -801,23 +818,25 @@ async function carregar(){
         </div>
       </div>
       <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <span style="font-size:.75rem;color:var(--eq-gray-400)">Filtrar por inspeção:</span>
-        <button class="insp-badge-btn" data-filtro-insp="delegadas" onclick="filtrarInsp('delegadas')">
-          👁 <strong>${delegadas}</strong> Delegadas
-        </button>
-        <button class="insp-badge-btn insp-ok" data-filtro-insp="ok" onclick="filtrarInsp('ok')">
-          ✅ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='ok'&&_lista.some(h=>h.uc===i.uc)).length}</strong> OK
-        </button>
-        <button class="insp-badge-btn insp-acao" data-filtro-insp="acao_necessaria" onclick="filtrarInsp('acao_necessaria')">
-          ⚠ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='acao_necessaria'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Ação necessária
-        </button>
-        <button class="insp-badge-btn insp-pendente" data-filtro-insp="pendente" onclick="filtrarInsp('pendente')">
-          ⏳ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='pendente'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Pendentes
-        </button>
-        <button class="insp-badge-btn insp-sem" data-filtro-insp="sem_inspecao" onclick="filtrarInsp('sem_inspecao')">
-          — <strong>${_lista.filter(h=>!_inspecoesMap[h.uc]).length}</strong> Sem inspeção
-        </button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <span style="font-size:.75rem;color:var(--eq-gray-400)">Filtrar por inspeção:</span>
+          <button class="insp-badge-btn" data-filtro-insp="delegadas" onclick="filtrarInsp('delegadas')">
+            👁 <strong>${delegadas}</strong> Delegadas
+          </button>
+          <button class="insp-badge-btn insp-ok" data-filtro-insp="ok" onclick="filtrarInsp('ok')">
+            ✅ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='ok'&&_lista.some(h=>h.uc===i.uc)).length}</strong> OK
+          </button>
+          <button class="insp-badge-btn insp-acao" data-filtro-insp="acao_necessaria" onclick="filtrarInsp('acao_necessaria')">
+            ⚠ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='acao_necessaria'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Ação necessária
+          </button>
+          <button class="insp-badge-btn insp-pendente" data-filtro-insp="pendente" onclick="filtrarInsp('pendente')">
+            ⏳ <strong>${Object.values(_inspecoesMap).filter(i=>i.status==='pendente'&&_lista.some(h=>h.uc===i.uc)).length}</strong> Pendentes
+          </button>
+          <button class="insp-badge-btn insp-sem" data-filtro-insp="sem_inspecao" onclick="filtrarInsp('sem_inspecao')">
+            — <strong>${_lista.filter(h=>!_inspecoesMap[h.uc]).length}</strong> Sem inspeção
+          </button>
+        </div>
+        ${_dropdownHtml}
       </div>`;
 
     document.getElementById('det-container').innerHTML=`
