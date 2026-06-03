@@ -284,7 +284,8 @@ function badgeInspecao(uc) {
     return `<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px">
       <span style="font-size:.72rem;font-weight:700;color:var(--eq-green)">🔧 Serviço concluído</span>
       <span style="font-size:.7rem;color:var(--eq-gray-500)">${acaoLabel}</span>
-      <span style="font-size:.7rem;color:var(--eq-gray-400)">— ${i.fiscal}</span>
+      ${i.acao_executada_por?`<span style="font-size:.7rem;color:var(--eq-gray-400)">— ${i.acao_executada_por}</span>`:''}
+      ${i.acao_executada_em?`<span style="font-size:.68rem;color:var(--eq-gray-400)">${fmtDateShort(i.acao_executada_em)}</span>`:''}
       ${efBadge}
       <a href="inspecoes.html" style="font-size:.68rem;color:var(--eq-blue);font-weight:600">Ver painel →</a>
     </div>`;
