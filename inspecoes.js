@@ -295,7 +295,7 @@ function renderTabela(lista) {
       <td style="font-size:.78rem">${fmtDate(i.delegado_em)}</td>
       <td style="font-size:.78rem">${fmtDate(i.acao_executada_em)}</td>
       <td style="text-align:center">${i.dias_restantes !== null && i.dias_restantes !== undefined ? `<span style="font-weight:700;color:${i.dias_restantes<=10?'var(--eq-red)':i.dias_restantes<=30?'var(--eq-amber-dark)':'var(--eq-green)'}">${i.dias_restantes}d</span>` : '—'}</td>
-      <td style="max-width:200px;font-size:.75rem;color:var(--eq-gray-600)">${i.observacao||''} ${i.conclusao_obs?`<br><em style="color:var(--eq-green)">✓ ${i.conclusao_obs}</em>`:''}</td>
+      <td style="max-width:200px;font-size:.75rem;color:var(--eq-gray-600)">${i.observacao||''} ${i.acao_executada_por?`<br><span style="color:var(--eq-blue);font-weight:700">👥 ${i.acao_executada_por}</span>`:''} ${i.conclusao_obs?`<br><em style="color:var(--eq-green)">✓ ${i.conclusao_obs}</em>`:''}</td>
       <td style="display:flex;gap:6px">
         ${btnAtualizar}
         <button onclick="excluirInspecoesUC('${i.uc}')" title="Excluir todas inspeções desta UC" style="padding:4px 8px;border-radius:6px;border:1.5px solid var(--eq-red);background:transparent;color:var(--eq-red);font-family:inherit;font-size:.72rem;cursor:pointer">🗑</button>
@@ -330,15 +330,11 @@ function exportarCSV() {
 // ============================================================
 async function calcularEfetividade() {
   // Busca ocorrências de TODAS as fontes para detectar reincidência
-  // 1. Histórico recente (últimos 4 meses) — tabela pode não existir em algumas instâncias
-  let recentes = [];
-  try {
-    const { data: _rec, error: _recErr } = await db
-      .from('historico_recente')
-      .select('uc,dt_inicio,finalizado')
-      .eq('finalizado', true);
-    if (!_recErr) recentes = _rec || [];
-  } catch(e) { console.warn('historico_recente indisponível para efetividade:', e.message); }
+  // 1. Histórico recente (últimos 4 meses)
+  const { data: recentes } = await db
+    .from('historico_recente')
+    .select('uc,dt_inicio,finalizado')
+    .eq('finalizado', true);
 
   // 2. Base histórica (todos os atendimentos do balde)
   async function fetchAll(q) {
@@ -546,16 +542,6 @@ async function carregar() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Popula fiscais do filtro conforme a regional ativa
-  const _selFiscal = document.getElementById('filtro-fiscal');
-  if (_selFiscal) {
-    const _reg = typeof getRegional === 'function' ? getRegional() : null;
-    (_reg?.fiscais || []).forEach(f => {
-      const o = document.createElement('option');
-      o.value = f; o.textContent = f;
-      _selFiscal.appendChild(o);
-    });
-  }
   carregar();
   document.getElementById('btn-refresh')?.addEventListener('click', carregar);
 });
