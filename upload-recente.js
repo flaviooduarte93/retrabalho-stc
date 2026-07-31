@@ -1,6 +1,18 @@
 // js/upload-recente.js — Supabase version
 
 // ============================================================
+// NORMALIZAÇÃO DE PREFIXO / EQUIPE
+// GO-GOO-E027T  ->  GOOE027T   (junta 2ª e 3ª partes, descarta a 1ª)
+// Formatos diferentes (já normalizados, '----', vazios) passam intactos.
+// ============================================================
+function normPrefixo(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return '';
+  const m = s.match(/^[^-\s]+-([^-\s]+)-([^-\s]+)$/);
+  return m ? (m[1] + m[2]).toUpperCase() : s;
+}
+
+// ============================================================
 // ALIMENTADOR — Goiânia / MUNICÍPIO — Metropolitana
 // ============================================================
 function _ignorarAlimentador(val) {
@@ -120,7 +132,7 @@ async function processarPlanilhaRecente(file, idx, total) {
 
     const estado    = String(row['Estado'] || '').trim();
     const pe        = String(row['Ponto Elétrico'] || '').trim();
-    const equipe    = String(row['Equipe'] || '').trim();
+    const equipe    = normPrefixo(row['Equipe']);
     const dtInicio  = parseDate(row['Data Início']);
     const dtFim     = parseDate(row['Data Fim']);
     const seccional = String(row['Seccional'] || '').trim();
