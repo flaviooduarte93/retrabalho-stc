@@ -1,6 +1,18 @@
 // js/upload.js — Supabase version
 
 // ============================================================
+// NORMALIZAÇÃO DE PREFIXO / EQUIPE
+// GO-GOO-E027T  ->  GOOE027T   (junta 2ª e 3ª partes, descarta a 1ª)
+// Formatos diferentes (já normalizados, '----', vazios) passam intactos.
+// ============================================================
+function normPrefixo(v) {
+  const s = String(v ?? '').trim();
+  if (!s) return '';
+  const m = s.match(/^[^-\s]+-([^-\s]+)-([^-\s]+)$/);
+  return m ? (m[1] + m[2]).toUpperCase() : s;
+}
+
+// ============================================================
 // HELPERS
 // ============================================================
 function parseDate(val) {
@@ -162,7 +174,7 @@ async function processHistorico(file) {
           os: osOrigem,
           data_origem: dtOrig,
           data_conc:   parseDate(r['DATA_CONCLUSAO_1º ATEND.'])?.toISOString()||null,
-          prefixo: String(r['PREFIXO_ORIGEM']||'')||'----',
+          prefixo: normPrefixo(r['PREFIXO_ORIGEM'])||'----',
           causa:   limparTexto(String(r['TIPO_CONCLUSAO_ORIGEM']||''))||'----',
         };
         setOsMap(chaveOS(osOrigem, dtOrig), rec);
@@ -174,7 +186,7 @@ async function processHistorico(file) {
           os: osAtual,
           data_origem: dtAtual,
           data_conc:   parseDate(r['OCO_DATA_CONCLUSAO'])?.toISOString()||null,
-          prefixo: String(r['PREFIXO']||'')||'----',
+          prefixo: normPrefixo(r['PREFIXO'])||'----',
           causa:   causaFinal,
         };
         setOsMap(chaveOS(osAtual, dtAtual), rec);
@@ -305,7 +317,7 @@ async function processAtual(file) {
     if (!ocorrencia) continue;
     const estado    = String(row['Estado']||'').trim();
     const pe        = String(row['Ponto Elétrico']||'').trim();
-    const equipe    = String(row['Equipe']||'').trim();
+    const equipe    = normPrefixo(row['Equipe']);
     const dtInicio  = parseDate(row['Data Início']);
     const dtFim     = parseDate(row['Data Fim']);
     const seccional = String(row['Seccional']||'').trim();
