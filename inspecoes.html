@@ -88,7 +88,7 @@
           <thead><tr>
             <th>UC</th><th>Fiscal</th><th>Status</th><th>Ação</th>
             <th>Status Ação</th><th>Delegado em</th><th>Executado em</th>
-            <th>Dias Restantes</th><th>Observações</th><th></th>
+            <th>Dias Restantes</th><th>Efetividade</th><th>Observações</th><th></th>
           </tr></thead>
           <tbody id="tabela-body"></tbody>
         </table>
@@ -102,7 +102,7 @@
     <div style="background:#fff;border-radius:16px;padding:28px 24px;width:100%;max-width:480px;box-shadow:0 24px 64px rgba(0,0,0,.2)">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:20px">
         <div>
-          <div style="font-size:.72rem;font-weight:600;color:var(--eq-gray-400);text-transform:uppercase;letter-spacing:.5px">Atualizar Execução da Ação</div>
+          <div style="font-size:.72rem;font-weight:600;color:var(--eq-gray-400);text-transform:uppercase;letter-spacing:.5px">Atualizar Inspeção</div>
           <div id="acao-uc-label" style="font-size:1.1rem;font-weight:800;color:var(--eq-blue-dark);margin-top:2px"></div>
           <div id="acao-detalhe-label" style="font-size:.8rem;color:var(--eq-gray-500);margin-top:2px"></div>
         </div>
@@ -110,6 +110,35 @@
       </div>
 
       <input type="hidden" id="acao-insp-id"/>
+
+      <!-- ── RESULTADO DA INSPEÇÃO ───────────────────────────── -->
+      <div style="margin-bottom:14px">
+        <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">👁 Resultado da inspeção</label>
+        <select id="sel-insp-status" onchange="toggleInspStatus()" style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.85rem;box-sizing:border-box">
+          <option value="pendente">⏳ Pendente — ainda não inspecionada</option>
+          <option value="ok">✅ Tudo OK — sem irregularidade</option>
+          <option value="acao_necessaria">⚠ Ação necessária</option>
+        </select>
+      </div>
+
+      <div id="insp-acao-row" style="margin-bottom:14px;display:none">
+        <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">🔧 Ação necessária</label>
+        <select id="sel-insp-acao" style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.85rem;box-sizing:border-box">
+          <option value="">Selecione...</option>
+          <option value="troca_conector">Troca de conector</option>
+          <option value="troca_ramal">Troca do ramal</option>
+          <option value="poda_arvore">Poda de árvore</option>
+          <option value="outros">Outros</option>
+        </select>
+      </div>
+
+      <div style="margin-bottom:14px">
+        <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">🗒 Observação da inspeção</label>
+        <textarea id="insp-obs" rows="2" placeholder="O que o fiscal constatou em campo..." style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.85rem;resize:vertical;box-sizing:border-box"></textarea>
+      </div>
+
+      <!-- ── EXECUÇÃO DA AÇÃO (só quando ação necessária) ────── -->
+      <div id="bloco-execucao" style="display:none;border-top:1.5px solid var(--eq-gray-100);padding-top:16px;margin-top:4px">
 
       <div style="margin-bottom:14px">
         <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:8px">📌 Status da execução</label>
@@ -136,6 +165,10 @@
         <label style="font-size:.8rem;font-weight:700;color:var(--eq-gray-700);display:block;margin-bottom:6px">📝 Observação de conclusão</label>
         <textarea id="exec-obs" rows="3" placeholder="Descreva o que foi feito..." style="width:100%;padding:10px 12px;border-radius:10px;border:1.5px solid var(--eq-gray-200);font-family:inherit;font-size:.85rem;resize:vertical;box-sizing:border-box"></textarea>
       </div>
+
+      </div><!-- /bloco-execucao -->
+
+      <div id="aviso-efetividade" style="display:none;font-size:.72rem;color:var(--eq-gray-500);background:var(--eq-gray-50);border-radius:8px;padding:8px 10px;margin-bottom:14px;line-height:1.4"></div>
 
       <div style="display:flex;gap:10px;justify-content:flex-end">
         <button onclick="fecharModalAcao()" style="padding:10px 20px;border-radius:10px;border:1.5px solid var(--eq-gray-200);background:#fff;font-family:inherit;font-size:.88rem;cursor:pointer;color:var(--eq-gray-600)">Cancelar</button>
