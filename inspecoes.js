@@ -24,6 +24,43 @@ function diasDesde(iso){ if(!iso)return null; return Math.floor((new Date()-new 
 let _todos = [], _chartFiscal = null, _chartAcoes = null;
 let _paginaAtual = 1;
 const _POR_PAGINA = 15;
+let _pagAcoes = 1;
+const _POR_PAGINA_ACOES = 10;
+
+// ============================================================
+// PAGINAÇÃO GENÉRICA (usada pela tabela e pelas ações pendentes)
+// ============================================================
+function montarPaginacao(paginaAtual, totalItens, porPagina, fnName, rotulo) {
+  const totalPags = Math.ceil(totalItens / porPagina);
+  const inicio    = (paginaAtual - 1) * porPagina;
+  const label     = `${inicio+1}\u2013${Math.min(inicio+porPagina, totalItens)} de ${totalItens} ${rotulo}`;
+  if (totalPags <= 1) {
+    return `<div style="display:flex;justify-content:flex-end;margin-top:12px"><span style="font-size:.78rem;color:var(--eq-gray-400)">${totalItens} ${rotulo}</span></div>`;
+  }
+
+  const btnCls   = 'style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--eq-gray-200);background:#fff;font-family:inherit;font-size:.78rem;cursor:pointer;transition:all .15s"';
+  const btnAtivo = 'style="padding:6px 12px;border-radius:8px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer"';
+  const btnOff   = 'disabled style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--eq-gray-100);background:var(--eq-gray-50);font-family:inherit;font-size:.78rem;color:var(--eq-gray-300);cursor:default"';
+
+  let pMin = Math.max(1, paginaAtual - 2);
+  let pMax = Math.min(totalPags, pMin + 4);
+  pMin = Math.max(1, pMax - 4);
+
+  const btns = [];
+  btns.push(`<button ${paginaAtual===1?btnOff:btnCls} onclick="${fnName}(${paginaAtual-1})">\u2039</button>`);
+  if (pMin > 1) btns.push(`<button ${btnCls} onclick="${fnName}(1)">1</button><span style="font-size:.78rem;color:var(--eq-gray-400);padding:0 2px">\u2026</span>`);
+  for (let p = pMin; p <= pMax; p++) {
+    btns.push(`<button ${p===paginaAtual?btnAtivo:btnCls} onclick="${fnName}(${p})">${p}</button>`);
+  }
+  if (pMax < totalPags) btns.push(`<span style="font-size:.78rem;color:var(--eq-gray-400);padding:0 2px">\u2026</span><button ${btnCls} onclick="${fnName}(${totalPags})">${totalPags}</button>`);
+  btns.push(`<button ${paginaAtual===totalPags?btnOff:btnCls} onclick="${fnName}(${paginaAtual+1})">\u203a</button>`);
+
+  return `
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:12px">
+      <span style="font-size:.78rem;color:var(--eq-gray-400)">${label}</span>
+      <div style="display:flex;gap:4px;align-items:center">${btns.join('')}</div>
+    </div>`;
+}
 
 // ============================================================
 // MODAL ATUALIZAR AÇÃO
@@ -31,18 +68,46 @@ const _POR_PAGINA = 15;
 function abrirModalAcao(id) {
   const insp = _todos.find(i => i.id === id);
   if (!insp) return;
-  document.getElementById('modal-acao').style.display    = 'flex';
-  document.getElementById('acao-uc-label').textContent   = `UC ${insp.uc}`;
-  document.getElementById('acao-detalhe-label').textContent = `${ACOES_LABEL[insp.acao]||'—'} · Fiscal: ${insp.fiscal}`;
-  document.getElementById('acao-insp-id').value          = id;
-  document.getElementById('exec-por').value              = insp.acao_executada_por || '';
-  document.getElementById('exec-obs').value              = insp.conclusao_obs || '';
-  document.getElementById('exec-data').value             = insp.acao_executada_em
+  document.getElementById('modal-acao').style.display      = 'flex';
+  document.getElementById('acao-uc-label').textContent     = `UC ${insp.uc}`;
+  document.getElementById('acao-detalhe-label').textContent = `Fiscal: ${insp.fiscal} \u00b7 Delegado em ${fmtDate(insp.delegado_em)}`;
+  document.getElementById('acao-insp-id').value            = id;
+
+  // Resultado da inspeção
+  document.getElementById('sel-insp-status').value = insp.status || 'pendente';
+  document.getElementById('sel-insp-acao').value   = insp.acao   || '';
+  document.getElementById('insp-obs').value        = insp.observacao || '';
+
+  // Execução da ação
+  document.getElementById('exec-por').value  = insp.acao_executada_por || '';
+  document.getElementById('exec-obs').value  = insp.conclusao_obs || '';
+  document.getElementById('exec-data').value = insp.acao_executada_em
     ? new Date(insp.acao_executada_em).toISOString().slice(0,16) : '';
 
-  // Marca radio correto
   const st = insp.acao_status || 'pendente';
   document.querySelectorAll('[name="acao-st"]').forEach(r => { r.checked = r.value === st; });
+
+  toggleInspStatus();
+}
+
+// Mostra/esconde os blocos conforme o resultado da inspeção
+function toggleInspStatus() {
+  const st = document.getElementById('sel-insp-status').value;
+  document.getElementById('insp-acao-row').style.display  = st === 'acao_necessaria' ? 'block' : 'none';
+  document.getElementById('bloco-execucao').style.display = st === 'acao_necessaria' ? 'block' : 'none';
+
+  const aviso = document.getElementById('aviso-efetividade');
+  if (aviso) {
+    if (st === 'ok') {
+      aviso.style.display = 'block';
+      aviso.innerHTML = '\u2139 Ao salvar como <strong>Tudo OK</strong>, esta UC passa a ser monitorada por <strong>30 dias</strong> para medir a <strong>efetividade da inspe\u00e7\u00e3o</strong>. Se houver nova ocorr\u00eancia nesse per\u00edodo, ela conta como inefetiva.';
+    } else if (st === 'acao_necessaria') {
+      aviso.style.display = 'block';
+      aviso.innerHTML = '\u2139 Marcando a execu\u00e7\u00e3o como <strong>Conclu\u00edda</strong> com data preenchida, a UC passa a ser monitorada por <strong>90 dias</strong> para medir a <strong>efetividade da manuten\u00e7\u00e3o</strong>.';
+    } else {
+      aviso.style.display = 'none';
+    }
+  }
   toggleDataExec();
 }
 
@@ -69,20 +134,64 @@ Essa ação é irreversível e a UC voltará a aparecer sem inspeção.`)) retur
 
 async function salvarAcao() {
   const id     = parseInt(document.getElementById('acao-insp-id').value);
+  const insp   = _todos.find(i => i.id === id) || {};
+  const status = document.getElementById('sel-insp-status').value;
+  const acao   = document.getElementById('sel-insp-acao').value || null;
+  const obsIns = document.getElementById('insp-obs').value.trim() || null;
   const st     = document.querySelector('[name="acao-st"]:checked')?.value || 'pendente';
   const por    = document.getElementById('exec-por').value.trim() || null;
   const data   = document.getElementById('exec-data').value;
   const obs    = document.getElementById('exec-obs').value.trim() || null;
   const btn    = document.getElementById('btn-salvar-acao');
+
+  if (status === 'acao_necessaria' && !acao) {
+    alert('Selecione o tipo de a\u00e7\u00e3o necess\u00e1ria.');
+    return;
+  }
+
   btn.textContent = 'Salvando...'; btn.disabled = true;
 
   try {
-    const { error } = await db.from('inspecoes').update({
-      acao_status:          st,
-      acao_executada_por:   por,
-      acao_executada_em:    data ? new Date(data).toISOString() : null,
-      conclusao_obs:        obs,
-    }).eq('id', id);
+    const payload = {
+      status,
+      acao:       status === 'acao_necessaria' ? acao : null,
+      observacao: obsIns,
+      // inspecionado_em: preserva o carimbo original; cria um se a inspeção
+      // acabou de sair de "pendente"; zera se voltou para "pendente".
+      inspecionado_em: status === 'pendente'
+        ? null
+        : (insp.inspecionado_em || new Date().toISOString()),
+    };
+
+    if (status === 'acao_necessaria') {
+      payload.acao_status        = st;
+      payload.acao_executada_por = por;
+      payload.acao_executada_em  = data ? new Date(data).toISOString() : null;
+      payload.conclusao_obs      = obs;
+    } else {
+      // Deixou de exigir ação — limpa os campos de execução
+      payload.acao_status        = null;
+      payload.acao_executada_por = null;
+      payload.acao_executada_em  = null;
+      payload.conclusao_obs      = null;
+    }
+
+    // ── EFETIVIDADE ──────────────────────────────────────────
+    // Zera as marcações que deixaram de valer para o novo estado,
+    // para que calcularEfetividade() as recalcule do zero.
+    payload.efetividade_inspecao = (status === 'ok')
+      ? (insp.status === 'ok' ? (insp.efetividade_inspecao ?? null) : null)
+      : null;
+
+    const continuaConcluida = status === 'acao_necessaria' && st === 'concluida'
+      && payload.acao_executada_em
+      && insp.acao_status === 'concluida'
+      && insp.acao_executada_em === payload.acao_executada_em;
+
+    payload.efetividade_manutencao = continuaConcluida ? (insp.efetividade_manutencao ?? null) : null;
+    payload.reincidencia_em        = continuaConcluida ? (insp.reincidencia_em ?? null)        : null;
+
+    const { error } = await db.from('inspecoes').update(payload).eq('id', id);
     if (error) throw error;
 
     fecharModalAcao();
@@ -198,44 +307,75 @@ function renderGraficos(lista) {
   });
 }
 
+function irPaginaAcoes(p) {
+  _pagAcoes = p;
+  renderAcoesPendentes();
+  document.getElementById('acoes-pendentes-container')?.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+
 function renderAcoesPendentes() {
   const pendentes = _todos
     .filter(i => i.status==='acao_necessaria' && (i.acao_status==='pendente'||!i.acao_status))
     .sort((a,b) => new Date(a.delegado_em)-new Date(b.delegado_em));
 
   const el = document.getElementById('acoes-pendentes-container');
-  if (!pendentes.length) { el.innerHTML=''; return; }
+  if (!pendentes.length) { el.innerHTML=''; _pagAcoes = 1; return; }
+
+  const totalPags = Math.ceil(pendentes.length / _POR_PAGINA_ACOES);
+  _pagAcoes = Math.min(Math.max(1, _pagAcoes), totalPags);
+  const inicio  = (_pagAcoes - 1) * _POR_PAGINA_ACOES;
+  const pagina  = pendentes.slice(inicio, inicio + _POR_PAGINA_ACOES);
 
   el.innerHTML = `
     <div class="result-card" style="margin-bottom:20px;border-left:4px solid var(--eq-red)">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
-        <span style="font-size:1.1rem">🚨</span>
-        <div class="gantt-title" style="margin-bottom:0;color:var(--eq-red)">Ações Pendentes de Execução (${pendentes.length})</div>
+        <span style="font-size:1.1rem">\u{1F6A8}</span>
+        <div class="gantt-title" style="margin-bottom:0;color:var(--eq-red)">A\u00e7\u00f5es Pendentes de Execu\u00e7\u00e3o (${pendentes.length})</div>
       </div>
       <div style="display:flex;flex-direction:column;gap:10px">
-        ${pendentes.map(i => {
+        ${pagina.map(i => {
           const diasAguardando = diasDesde(i.delegado_em);
           const urgencia = diasAguardando > 30 ? 'var(--eq-red)' : diasAguardando > 7 ? 'var(--eq-amber-dark)' : 'var(--eq-gray-600)';
           return `<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:12px;background:var(--eq-gray-50);border-radius:10px;border:1px solid var(--eq-gray-100)">
             <div>
               <div style="font-weight:700;color:var(--eq-blue-dark)">UC ${i.uc}</div>
-              <div style="font-size:.78rem;color:var(--eq-gray-600)">${ACOES_LABEL[i.acao]||'—'} · Fiscal: <strong>${i.fiscal}</strong></div>
+              <div style="font-size:.78rem;color:var(--eq-gray-600)">${ACOES_LABEL[i.acao]||'\u2014'} \u00b7 Fiscal: <strong>${i.fiscal}</strong></div>
               ${i.observacao ? `<div style="font-size:.75rem;color:var(--eq-gray-500);margin-top:2px;font-style:italic">"${i.observacao}"</div>` : ''}
             </div>
             <div style="display:flex;align-items:center;gap:10px">
               <div style="text-align:right">
-                <div style="font-size:.72rem;color:var(--eq-gray-400)">Aguardando há</div>
+                <div style="font-size:.72rem;color:var(--eq-gray-400)">Aguardando h\u00e1</div>
                 <div style="font-weight:800;font-size:1.1rem;color:${urgencia}">${diasAguardando}d</div>
               </div>
               <div style="display:flex;gap:6px">
-                <button onclick="abrirModalAcao(${i.id})" style="padding:6px 14px;border-radius:8px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">Atualizar →</button>
-                <button onclick="excluirInspecoesUC('${i.uc}')" title="Excluir inspeção" style="padding:6px 10px;border-radius:8px;border:1.5px solid var(--eq-red);background:transparent;color:var(--eq-red);font-size:.78rem;cursor:pointer">🗑</button>
+                <button onclick="abrirModalAcao(${i.id})" style="padding:6px 14px;border-radius:8px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">Atualizar \u2192</button>
+                <button onclick="excluirInspecoesUC('${i.uc}')" title="Excluir inspe\u00e7\u00e3o" style="padding:6px 10px;border-radius:8px;border:1.5px solid var(--eq-red);background:transparent;color:var(--eq-red);font-size:.78rem;cursor:pointer">\u{1F5D1}</button>
               </div>
             </div>
           </div>`;
         }).join('')}
       </div>
+      ${montarPaginacao(_pagAcoes, pendentes.length, _POR_PAGINA_ACOES, 'irPaginaAcoes', 'a\u00e7\u00f5es pendentes')}
     </div>`;
+}
+
+const EF_LABEL = {
+  efetiva:     { label:'Efetiva',     cor:'var(--eq-green)' },
+  inefetiva:   { label:'Inefetiva',   cor:'var(--eq-red)' },
+  monitorando: { label:'Monitorando', cor:'var(--eq-blue)' },
+};
+
+// Mostra a efetividade que se aplica ao estado atual da inspeção
+function badgeEfetividade(i) {
+  let ef = null, tipo = '';
+  if (i.status === 'acao_necessaria' && i.acao_status === 'concluida') {
+    ef = i.efetividade_manutencao; tipo = '\u{1F527}';
+  } else if (i.status === 'ok' && i.inspecionado_em) {
+    ef = i.efetividade_inspecao;   tipo = '\u{1F441}';
+  }
+  if (!ef) return '<span style="color:var(--eq-gray-300)">\u2014</span>';
+  const cfg = EF_LABEL[ef] || { label:ef, cor:'var(--eq-gray-500)' };
+  return `<span style="font-weight:700;color:${cfg.cor}">${tipo} ${cfg.label}</span>`;
 }
 
 function renderTabela(lista) {
@@ -243,7 +383,7 @@ function renderTabela(lista) {
   const paginacaoEl = document.getElementById('paginacao-tabela');
 
   if (!lista.length) {
-    tbody.innerHTML='<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--eq-gray-400)">Nenhuma inspeção encontrada.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="11" style="text-align:center;padding:32px;color:var(--eq-gray-400)">Nenhuma inspeção encontrada.</td></tr>';
     if (paginacaoEl) paginacaoEl.innerHTML = '';
     return;
   }
@@ -254,38 +394,16 @@ function renderTabela(lista) {
   const inicio     = (_paginaAtual - 1) * _POR_PAGINA;
   const pagina     = sorted.slice(inicio, inicio + _POR_PAGINA);
 
-  // Renderiza paginação
   if (paginacaoEl) {
-    const btnCls = 'style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--eq-gray-200);background:#fff;font-family:inherit;font-size:.78rem;cursor:pointer;transition:all .15s"';
-    const btnAtivo = 'style="padding:6px 12px;border-radius:8px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer"';
-
-    // Calcula janela de páginas visíveis (max 5)
-    let pMin = Math.max(1, _paginaAtual - 2);
-    let pMax = Math.min(totalPags, pMin + 4);
-    pMin = Math.max(1, pMax - 4);
-
-    const btns = [];
-    btns.push(`<button ${_paginaAtual===1?'disabled style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--eq-gray-100);background:var(--eq-gray-50);font-family:inherit;font-size:.78rem;color:var(--eq-gray-300);cursor:default"':btnCls} onclick="irPagina(${_paginaAtual-1})">‹</button>`);
-    if (pMin > 1) btns.push(`<button ${btnCls} onclick="irPagina(1)">1</button><span style="font-size:.78rem;color:var(--eq-gray-400);padding:0 2px">…</span>`);
-    for (let p = pMin; p <= pMax; p++) {
-      btns.push(`<button ${p===_paginaAtual?btnAtivo:btnCls} onclick="irPagina(${p})">${p}</button>`);
-    }
-    if (pMax < totalPags) btns.push(`<span style="font-size:.78rem;color:var(--eq-gray-400);padding:0 2px">…</span><button ${btnCls} onclick="irPagina(${totalPags})">${totalPags}</button>`);
-    btns.push(`<button ${_paginaAtual===totalPags?'disabled style="padding:6px 12px;border-radius:8px;border:1.5px solid var(--eq-gray-100);background:var(--eq-gray-50);font-family:inherit;font-size:.78rem;color:var(--eq-gray-300);cursor:default"':btnCls} onclick="irPagina(${_paginaAtual+1})">›</button>`);
-
-    paginacaoEl.innerHTML = `
-      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:12px">
-        <span style="font-size:.78rem;color:var(--eq-gray-400)">${inicio+1}–${Math.min(inicio+_POR_PAGINA, sorted.length)} de ${sorted.length} inspeções</span>
-        <div style="display:flex;gap:4px;align-items:center">${btns.join('')}</div>
-      </div>`;
+    paginacaoEl.innerHTML = montarPaginacao(_paginaAtual, sorted.length, _POR_PAGINA, 'irPagina', 'inspe\u00e7\u00f5es');
   }
 
   tbody.innerHTML = pagina.map(i => {
     const st    = STATUS_LABEL[i.status]    || { label:i.status, cor:'var(--eq-gray-500)' };
     const acSt  = ACAO_ST_LABEL[i.acao_status] || { label:'—', cor:'var(--eq-gray-400)' };
-    const btnAtualizar = i.status==='acao_necessaria'
-      ? `<button onclick="abrirModalAcao(${i.id})" style="padding:4px 10px;border-radius:6px;border:1.5px solid var(--eq-blue);background:transparent;color:var(--eq-blue);font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer">Atualizar</button>`
-      : '';
+    // Botão disponível em TODA linha — permite mudar o resultado da
+    // inspeção (pendente / OK / ação necessária) e a execução da ação.
+    const btnAtualizar = `<button onclick="abrirModalAcao(${i.id})" style="padding:4px 10px;border-radius:6px;border:1.5px solid var(--eq-blue);background:transparent;color:var(--eq-blue);font-family:inherit;font-size:.72rem;font-weight:700;cursor:pointer;white-space:nowrap">Atualizar</button>`;
     return `<tr>
       <td><a href="pesquisa.html?uc=${i.uc}" style="color:var(--eq-blue-dark);font-weight:700">${i.uc}</a></td>
       <td>${i.fiscal}</td>
@@ -295,6 +413,7 @@ function renderTabela(lista) {
       <td style="font-size:.78rem">${fmtDate(i.delegado_em)}</td>
       <td style="font-size:.78rem">${fmtDate(i.acao_executada_em)}</td>
       <td style="text-align:center">${i.dias_restantes !== null && i.dias_restantes !== undefined ? `<span style="font-weight:700;color:${i.dias_restantes<=10?'var(--eq-red)':i.dias_restantes<=30?'var(--eq-amber-dark)':'var(--eq-green)'}">${i.dias_restantes}d</span>` : '—'}</td>
+      <td style="font-size:.72rem;white-space:nowrap">${badgeEfetividade(i)}</td>
       <td style="max-width:200px;font-size:.75rem;color:var(--eq-gray-600)">${i.observacao||''} ${i.acao_executada_por?`<br><span style="color:var(--eq-blue);font-weight:700">👥 ${i.acao_executada_por}</span>`:''} ${i.conclusao_obs?`<br><em style="color:var(--eq-green)">✓ ${i.conclusao_obs}</em>`:''}</td>
       <td style="display:flex;gap:6px">
         ${btnAtualizar}
@@ -307,7 +426,7 @@ function renderTabela(lista) {
 function exportarCSV() {
   const lista = dadosFiltrados();
   const bom = '\uFEFF';
-  const cabecalho = ['UC','Fiscal','Status','Ação','Status Ação','Executado por','Delegado em','Executado em','Dias restantes','Observação','Obs. conclusão'];
+  const cabecalho = ['UC','Fiscal','Status','Ação','Status Ação','Executado por','Delegado em','Executado em','Dias restantes','Efetividade manutenção','Efetividade inspeção','Reincidência em','Observação','Obs. conclusão'];
   const linhas = lista.map(i => [
     i.uc, i.fiscal,
     STATUS_LABEL[i.status]?.label||i.status,
@@ -316,6 +435,7 @@ function exportarCSV() {
     i.acao_executada_por||'—',
     fmtDate(i.delegado_em), fmtDate(i.acao_executada_em),
     i.dias_restantes??'—',
+    i.efetividade_manutencao||'—', i.efetividade_inspecao||'—', fmtDate(i.reincidencia_em),
     i.observacao||'—', i.conclusao_obs||'—',
   ]);
   const csv = bom + [cabecalho,...linhas].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(';')).join('\n');
@@ -388,7 +508,9 @@ async function calcularEfetividade() {
     if (i.status === 'acao_necessaria' && i.acao_status === 'concluida' && i.acao_executada_em) {
       const dtExec    = new Date(i.acao_executada_em);
       const fim90     = new Date(dtExec.getTime() + 90*86400000);
-      const ocorrs    = (recentesPorUC[i.uc]||[]).map(d => new Date(d)).filter(d => d > dtExec);
+      // CORREÇÃO: só conta reincidência DENTRO da janela de 90 dias.
+      // Antes qualquer ocorrência posterior contava, mesmo 1 ano depois.
+      const ocorrs    = (recentesPorUC[i.uc]||[]).map(d => new Date(d)).filter(d => d > dtExec && d <= fim90);
       const reincidiu = ocorrs.length > 0;
 
       const novaEf = reincidiu ? 'inefetiva' : hoje > fim90 ? 'efetiva' : 'monitorando';
@@ -405,11 +527,16 @@ async function calcularEfetividade() {
     if (i.status === 'ok' && i.inspecionado_em) {
       const dtInsp = new Date(i.inspecionado_em);
       const fim30  = new Date(dtInsp.getTime() + 30*86400000);
-      const ocorrs = (recentesPorUC[i.uc]||[]).map(d => new Date(d)).filter(d => d > dtInsp);
+      // CORREÇÃO: janela fechada de 30 dias (ver comentário acima).
+      const ocorrs = (recentesPorUC[i.uc]||[]).map(d => new Date(d)).filter(d => d > dtInsp && d <= fim30);
       const reincidiu = ocorrs.length > 0;
 
       const novaEf = reincidiu ? 'inefetiva' : hoje > fim30 ? 'efetiva' : 'monitorando';
       if (novaEf !== efInspecao) { efInspecao = novaEf; changed = true; }
+      if (reincidiu) {
+        const dtReinc = ocorrs.sort((a,b)=>a-b)[0].toISOString();
+        if (dtReinc !== reincidenciaEm) { reincidenciaEm = dtReinc; changed = true; }
+      }
     }
 
     if (changed) {
@@ -446,10 +573,17 @@ function renderEfetividade() {
     monitorando:inspecoesOk.filter(i=>i.efetividade_inspecao==='monitorando'||!i.efetividade_inspecao).length,
   };
 
-  const pctManut = concluidas.length ? Math.round(efManut.efetiva/(concluidas.length-efManut.monitorando||1)*100) : null;
-  const pctInsp  = inspecoesOk.length ? Math.round(efInsp.efetiva/(inspecoesOk.length-efInsp.monitorando||1)*100) : null;
+  // Percentual sobre o que já FECHOU a janela (efetiva + inefetiva).
+  // Itens em 'monitorando' ficam de fora — ainda não têm veredito.
+  const baseManut = efManut.efetiva + efManut.inefetiva;
+  const baseInsp  = efInsp.efetiva  + efInsp.inefetiva;
+  const pctManut = baseManut ? Math.round(efManut.efetiva/baseManut*100) : null;
+  const pctInsp  = baseInsp  ? Math.round(efInsp.efetiva /baseInsp *100) : null;
 
-  const inefetivas = _todos.filter(i => i.efetividade_manutencao==='inefetiva' || i.efetividade_inspecao==='inefetiva');
+  const inefetivas = [
+    ...concluidas.filter(i => i.efetividade_manutencao==='inefetiva'),
+    ...inspecoesOk.filter(i => i.efetividade_inspecao==='inefetiva'),
+  ];
 
   const el = document.getElementById('efetividade-container');
   if (!el) return;
@@ -465,7 +599,7 @@ function renderEfetividade() {
             <div style="height:10px;border-radius:99px;background:var(--eq-gray-100);overflow:hidden;display:flex">
               <div style="width:${pctManut??0}%;background:var(--eq-green);transition:width .5s"></div>
             </div>
-            <div style="font-size:.72rem;color:var(--eq-gray-500);margin-top:4px">${concluidas.length} serviços concluídos</div>
+            <div style="font-size:.72rem;color:var(--eq-gray-500);margin-top:4px">${baseManut} de ${concluidas.length} serviços com janela encerrada</div>
           </div>
           <div style="font-size:1.6rem;font-weight:800;color:${pctManut>=80?'var(--eq-green)':pctManut>=50?'var(--eq-amber-dark)':'var(--eq-red)'}">${pctManut!==null?pctManut+'%':'—'}</div>
         </div>
@@ -484,7 +618,7 @@ function renderEfetividade() {
             <div style="height:10px;border-radius:99px;background:var(--eq-gray-100);overflow:hidden;display:flex">
               <div style="width:${pctInsp??0}%;background:var(--eq-green);transition:width .5s"></div>
             </div>
-            <div style="font-size:.72rem;color:var(--eq-gray-500);margin-top:4px">${inspecoesOk.length} inspeções OK</div>
+            <div style="font-size:.72rem;color:var(--eq-gray-500);margin-top:4px">${baseInsp} de ${inspecoesOk.length} inspeções com janela encerrada</div>
           </div>
           <div style="font-size:1.6rem;font-weight:800;color:${pctInsp>=80?'var(--eq-green)':pctInsp>=50?'var(--eq-amber-dark)':'var(--eq-red)'}">${pctInsp!==null?pctInsp+'%':'—'}</div>
         </div>
