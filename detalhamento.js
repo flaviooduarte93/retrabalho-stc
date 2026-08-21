@@ -17,6 +17,59 @@ let _lista=[], _criterio='menor-tempo', _filtro='', _filtroCard='todos', _filtro
 let _paginaAtual=1, _porPagina=20, _filtroMunicipio='';
 let _histTodos=[], _chartReincidencia=null;
 let _inspecoesMap = {}; // uc → inspecao mais recente
+
+// ============================================================
+// SINCRONIZAÇÃO COM O PAINEL DE INSPEÇÕES (inspecoes.html)
+// Mesma tabela `inspecoes` nas duas telas. Ao receber o ping,
+// recarrega só as inspeções (rápido) e redesenha a lista.
+// ============================================================
+const PING_INSP = 'retrabalho_insp_ping';
+let _ultimoPing = null;
+
+function avisarAtualizacao() {
+  try {
+    _ultimoPing = String(Date.now());
+    localStorage.setItem(PING_INSP, _ultimoPing);
+  } catch(e) { /* localStorage bloqueado — segue sem sincronizar */ }
+}
+
+function _pingExterno() {
+  try {
+    const atual = localStorage.getItem(PING_INSP);
+    if (atual && atual !== _ultimoPing) { _ultimoPing = atual; return true; }
+  } catch(e) {}
+  return false;
+}
+
+// Recalcula os contadores dos chips de inspeção sem redesenhar a página
+function atualizarContadoresInsp() {
+  const set = (tipo, n) => {
+    const el = document.querySelector(`[data-filtro-insp="${tipo}"] strong`);
+    if (el) el.textContent = n;
+  };
+  const noLista = uc => _lista.some(h => h.uc === uc);
+  set('delegadas',       Object.keys(_inspecoesMap).filter(noLista).length);
+  set('ok',              Object.values(_inspecoesMap).filter(i=>i.status==='ok'&&noLista(i.uc)).length);
+  set('acao_necessaria', Object.values(_inspecoesMap).filter(i=>i.status==='acao_necessaria'&&noLista(i.uc)).length);
+  set('pendente',        Object.values(_inspecoesMap).filter(i=>i.status==='pendente'&&noLista(i.uc)).length);
+  set('sem_inspecao',    _lista.filter(h=>!_inspecoesMap[h.uc]).length);
+}
+
+// Recarrega APENAS a tabela de inspeções e redesenha
+async function sincronizarInspecoes() {
+  try {
+    async function fetchAll(q){
+      let all=[],page=0;
+      while(true){const{data}=await q.range(page*1000,page*1000+999);if(!data?.length)break;all=all.concat(data);if(data.length<1000)break;page++;}
+      return all;
+    }
+    const inspecoes = await fetchAll(db.from('inspecoes').select('*').order('delegado_em',{ascending:false}));
+    _inspecoesMap = {};
+    for (const i of inspecoes) { if (!_inspecoesMap[i.uc]) _inspecoesMap[i.uc] = i; }
+    atualizarContadoresInsp();
+    aplicarFiltroOrdem();
+  } catch(e) { console.warn('Falha ao sincronizar inspeções:', e.message); }
+}
 let _bulkMode     = false;
 let _selectedUCs  = new Set();
 
@@ -81,8 +134,13 @@ async function salvarDelegacaoEmMassa() {
   for (const uc of ucs) {
     try {
       const existente = _inspecoesMap[uc];
+      // Volta ao estado "pendente": zera execução e efetividade para não
+      // herdar veredito de uma inspeção anterior da mesma UC.
       const payload = { uc, fiscal, status: 'pendente', acao: null, observacao: null,
-        dias_restantes: null, data_saida: null, inspecionado_em: null };
+        dias_restantes: null, data_saida: null, inspecionado_em: null,
+        acao_status: null, acao_executada_por: null, acao_executada_em: null,
+        conclusao_obs: null, efetividade_manutencao: null, efetividade_inspecao: null,
+        reincidencia_em: null };
       if (existente?.id) {
         const { error } = await db.from('inspecoes').update(payload).eq('id', existente.id);
         if (error) throw error;
@@ -100,7 +158,9 @@ async function salvarDelegacaoEmMassa() {
     alert(`${ucs.length - erros.length} delegadas com sucesso. Erros em: ${erros.join(', ')}`);
   } else {
     // Fecha bulk mode e atualiza lista
+    avisarAtualizacao();
     toggleBulkMode(false);
+    atualizarContadoresInsp();
     aplicarFiltroOrdem();
   }
 }
@@ -193,6 +253,7 @@ async function cancelarDelegacao(uc, btnEl) {
     }
     if (error) throw error;
     delete _inspecoesMap[uc];
+    avisarAtualizacao();
     aplicarFiltroOrdem();
   } catch(err) {
     console.error('Erro ao cancelar delegação:', err);
@@ -222,13 +283,31 @@ async function salvarDelegacao() {
   btn.textContent = 'Salvando...'; btn.disabled = true;
 
   try {
+    const existente = _inspecoesMap[uc];
+
     const payload = {
       uc, fiscal, status, acao, observacao: obs,
       dias_restantes: dias, data_saida: saida,
-      inspecionado_em: status !== 'pendente' ? new Date().toISOString() : null,
+      // Preserva o carimbo original — ele é o marco zero da janela de
+      // 30 dias da efetividade da inspeção. Só cria um novo quando a
+      // inspeção sai de "pendente" pela primeira vez.
+      inspecionado_em: status === 'pendente'
+        ? null
+        : (existente?.inspecionado_em || new Date().toISOString()),
     };
 
-    const existente = _inspecoesMap[uc];
+    // Deixou de exigir ação → limpa execução e efetividade da manutenção
+    if (status !== 'acao_necessaria') {
+      payload.acao_status            = null;
+      payload.acao_executada_por     = null;
+      payload.acao_executada_em      = null;
+      payload.conclusao_obs          = null;
+      payload.efetividade_manutencao = null;
+      payload.reincidencia_em        = null;
+    }
+    // Deixou de ser OK → limpa efetividade da inspeção
+    if (status !== 'ok') payload.efetividade_inspecao = null;
+
     let error;
 
     if (existente?.id) {
@@ -243,6 +322,7 @@ async function salvarDelegacao() {
 
     // Atualiza mapa local
     _inspecoesMap[uc] = { ...existente, ...payload };
+    avisarAtualizacao();
 
     fecharModalDelegar();
 
@@ -867,4 +947,16 @@ async function carregar(){
   }
 }
 
-document.addEventListener('DOMContentLoaded', carregar);
+document.addEventListener('DOMContentLoaded', () => {
+  try { _ultimoPing = localStorage.getItem(PING_INSP); } catch(e) {}
+  carregar();
+
+  // O painel de inspeções (outra aba) alterou uma inspeção
+  window.addEventListener('storage', e => {
+    if (e.key === PING_INSP) { _ultimoPing = e.newValue; sincronizarInspecoes(); }
+  });
+  // Voltou para esta aba depois de mexer no painel de inspeções
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && _pingExterno()) sincronizarInspecoes();
+  });
+});
