@@ -28,6 +28,29 @@ let _pagAcoes = 1;
 const _POR_PAGINA_ACOES = 10;
 
 // ============================================================
+// SINCRONIZAÇÃO COM "UCs EM RETRABALHO" (detalhamento.html)
+// As duas telas leem a MESMA tabela `inspecoes`. Este ping avisa
+// a outra aba que os dados mudaram, para ela recarregar sozinha.
+// ============================================================
+const PING_INSP = 'retrabalho_insp_ping';
+let _ultimoPing = null;
+
+function avisarAtualizacao() {
+  try {
+    _ultimoPing = String(Date.now());
+    localStorage.setItem(PING_INSP, _ultimoPing);
+  } catch(e) { /* localStorage bloqueado — segue sem sincronizar */ }
+}
+
+function _pingExterno() {
+  try {
+    const atual = localStorage.getItem(PING_INSP);
+    if (atual && atual !== _ultimoPing) { _ultimoPing = atual; return true; }
+  } catch(e) {}
+  return false;
+}
+
+// ============================================================
 // PAGINAÇÃO GENÉRICA (usada pela tabela e pelas ações pendentes)
 // ============================================================
 function montarPaginacao(paginaAtual, totalItens, porPagina, fnName, rotulo) {
@@ -126,6 +149,7 @@ Essa ação é irreversível e a UC voltará a aparecer sem inspeção.`)) retur
   try {
     const { error } = await db.from('inspecoes').delete().eq('uc', uc);
     if (error) throw error;
+    avisarAtualizacao();
     await carregar();
   } catch(err) {
     alert(`Erro ao excluir: ${err.message}`);
@@ -194,6 +218,7 @@ async function salvarAcao() {
     const { error } = await db.from('inspecoes').update(payload).eq('id', id);
     if (error) throw error;
 
+    avisarAtualizacao();
     fecharModalAcao();
     await carregar();
   } catch(err) {
@@ -676,6 +701,16 @@ async function carregar() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  try { _ultimoPing = localStorage.getItem(PING_INSP); } catch(e) {}
   carregar();
   document.getElementById('btn-refresh')?.addEventListener('click', carregar);
+
+  // Outra aba (UCs em Retrabalho) alterou uma inspeção
+  window.addEventListener('storage', e => {
+    if (e.key === PING_INSP) { _ultimoPing = e.newValue; carregar(); }
+  });
+  // Voltou para esta aba depois de mexer na outra
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && _pingExterno()) carregar();
+  });
 });
