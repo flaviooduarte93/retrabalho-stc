@@ -1,5 +1,39 @@
 // js/inspecoes.js — Painel de Inspeções
 
+// ============================================================
+// HISTÓRICO DE AÇÕES — grava cada mudança na inspeção
+// ============================================================
+const TIPO_ACAO_LABEL = {
+  delegacao:    '👁 Delegação',
+  inspecao:     '📋 Inspeção',
+  execucao:     '🔧 Execução',
+  reinspecao:   '🔄 Reinspecção',
+  cancelamento: '🗑 Cancelamento',
+};
+
+function buildEvento(insp, payload, tipo) {
+  const ev = {
+    tipo,
+    em: new Date().toISOString(),
+    status_anterior: insp.status || null,
+    status_novo:     payload.status ?? insp.status,
+  };
+  if (payload.fiscal)              ev.fiscal = payload.fiscal;
+  if (payload.observacao)          ev.obs_inspecao = payload.observacao;
+  if (payload.acao)                ev.acao = payload.acao;
+  if (payload.acao_status)         ev.acao_status = payload.acao_status;
+  if (payload.acao_executada_por)  ev.executado_por = payload.acao_executada_por;
+  if (payload.acao_executada_em)   ev.data_execucao = payload.acao_executada_em;
+  if (payload.conclusao_obs)       ev.obs_conclusao = payload.conclusao_obs;
+  return ev;
+}
+
+function appendHistorico(insp, evento) {
+  const arr = Array.isArray(insp.historico_acoes) ? [...insp.historico_acoes] : [];
+  arr.push(evento);
+  return arr;
+}
+
 const ACOES_LABEL = {
   troca_conector: 'Troca de conector',
   troca_ramal:    'Troca do ramal',
@@ -176,15 +210,21 @@ async function salvarAcao() {
   btn.textContent = 'Salvando...'; btn.disabled = true;
 
   try {
+    // Detecta reinspecção: era inefetiva e o status está mudando
+    const wasInefetiva = insp.efetividade_manutencao === 'inefetiva'
+                      || insp.efetividade_inspecao   === 'inefetiva';
+
     const payload = {
       status,
       acao:       status === 'acao_necessaria' ? acao : null,
       observacao: obsIns,
-      // inspecionado_em: preserva o carimbo original; cria um se a inspeção
-      // acabou de sair de "pendente"; zera se voltou para "pendente".
+      // inspecionado_em: preserva o carimbo original; cria um novo se
+      // a inspeção sai de "pendente" pela primeira vez OU é reinspecção.
       inspecionado_em: status === 'pendente'
         ? null
-        : (insp.inspecionado_em || new Date().toISOString()),
+        : wasInefetiva
+          ? new Date().toISOString()           // ← REINSPECÇÃO: reseta o timer
+          : (insp.inspecionado_em || new Date().toISOString()),
     };
 
     if (status === 'acao_necessaria') {
@@ -214,6 +254,12 @@ async function salvarAcao() {
 
     payload.efetividade_manutencao = continuaConcluida ? (insp.efetividade_manutencao ?? null) : null;
     payload.reincidencia_em        = continuaConcluida ? (insp.reincidencia_em ?? null)        : null;
+
+    // ── HISTÓRICO ─────────────────────────────────────────────
+    const tipoEvento = wasInefetiva ? 'reinspecao'
+                     : (status === 'acao_necessaria' && st !== 'pendente') ? 'execucao'
+                     : 'inspecao';
+    payload.historico_acoes = appendHistorico(insp, buildEvento(insp, payload, tipoEvento));
 
     const { error } = await db.from('inspecoes').update(payload).eq('id', id);
     if (error) throw error;
@@ -673,7 +719,10 @@ function renderEfetividade() {
               </div>
               ${i.reincidencia_em ? `<div style="font-size:.72rem;color:var(--eq-red)">Reincidência em: ${fmtDate(i.reincidencia_em)}</div>` : ''}
             </div>
-            <a href="pesquisa.html?uc=${i.uc}" style="font-size:.75rem;font-weight:700;color:var(--eq-red);text-decoration:none">Ver histórico →</a>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button onclick="abrirModalAcao(${i.id})" style="padding:6px 14px;border-radius:8px;border:none;background:var(--eq-blue);color:#fff;font-family:inherit;font-size:.78rem;font-weight:700;cursor:pointer;white-space:nowrap">\u{1F504} Reinspecionar</button>
+              <a href="pesquisa.html?uc=${i.uc}" style="font-size:.75rem;font-weight:700;color:var(--eq-red);text-decoration:none;white-space:nowrap">Ver hist\u00f3rico \u2192</a>
+            </div>
           </div>`).join('')}
       </div>
     </div>` : ''}`;
