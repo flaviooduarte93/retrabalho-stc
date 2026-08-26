@@ -196,8 +196,24 @@ async function pesquisarUC(uc){
     recenteDocs = recenteDocs.filter((r,i,arr)=>arr.findIndex(x=>x.id===r.id)===i);
     ativasDocs  = ativasDocs.filter((a,i,arr)=>arr.findIndex(x=>x.ocorrencia===a.ocorrencia)===i);
 
-    if(!histDoc && !recenteDocs?.length && !ativasDocs?.length){
+    if(!histDoc && !recenteDocs?.length && !ativasDocs?.length && !inspecoesDocs?.length){
       res.innerHTML=`<div class="no-results"><svg width="60" height="60" viewBox="0 0 60 60" fill="none"><circle cx="30" cy="30" r="28" stroke="#C8D6E5" stroke-width="2"/><path d="M20 30h20M30 20v20" stroke="#C8D6E5" stroke-width="2" stroke-linecap="round"/></svg><p>UC <strong>${uc}</strong> não encontrada em nenhuma base.</p></div>`;
+      return;
+    }
+
+    // UC sem atendimentos mas COM inspeção → mostra só o histórico de inspeções
+    if(!histDoc && !recenteDocs?.length && !ativasDocs?.length && inspecoesDocs.length){
+      res.innerHTML=`
+        <div class="result-card">
+          <div class="result-header">
+            <div class="result-uc">UC ${uc}</div>
+            <span class="badge-ok" style="background:var(--eq-blue)">📋 Apenas inspeções</span>
+          </div>
+          <div style="font-size:.85rem;color:var(--eq-gray-500);margin-bottom:8px">
+            Esta UC não possui atendimentos nas bases de retrabalho, mas tem registros de inspeção.
+          </div>
+        </div>
+        ${renderHistoricoInspecoes(inspecoesDocs)}`;
       return;
     }
 
