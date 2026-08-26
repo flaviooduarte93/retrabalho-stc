@@ -12,6 +12,103 @@ function fmtDate(iso){if(!iso)return'----';return new Date(iso).toLocaleString('
 function fmtDateShort(iso){if(!iso)return'----';return new Date(iso).toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit',year:'numeric'});}
 function calcRetrabalho(dc){if(!dc)return false;return new Date()<=new Date(new Date(dc).getTime()+91*86400000);}
 
+
+// ============================================================
+// HISTÓRICO DE INSPEÇÕES (timeline de ações na UC)
+// ============================================================
+const _STATUS_LBL  = { pendente:'\u23f3 Pendente', ok:'\u2705 Tudo OK', acao_necessaria:'\u26a0 A\u00e7\u00e3o necess\u00e1ria' };
+const _ACAO_LBL    = { troca_conector:'Troca de conector', troca_ramal:'Troca do ramal', poda_arvore:'Poda de \u00e1rvore', outros:'Outros' };
+const _EXEC_LBL    = { pendente:'\u23f3 Pendente', em_andamento:'\ud83d\udd04 Em andamento', concluida:'\u2705 Conclu\u00edda', nao_executada:'\u274c N\u00e3o executada' };
+const _TIPO_LBL    = { delegacao:'\ud83d\udc41 Delega\u00e7\u00e3o', inspecao:'\ud83d\udccb Inspe\u00e7\u00e3o', execucao:'\ud83d\udd27 Execu\u00e7\u00e3o', reinspecao:'\ud83d\udd04 Reinspec\u00e7\u00e3o', cancelamento:'\ud83d\uddd1 Cancelamento' };
+const _TIPO_COR    = { delegacao:'var(--eq-blue)', inspecao:'var(--eq-green)', execucao:'var(--eq-amber-dark)', reinspecao:'var(--eq-blue-dark,#0D47A1)', cancelamento:'var(--eq-red)' };
+const _EF_LBL      = { efetiva:'\u2705 Efetiva', inefetiva:'\u274c Inefetiva', monitorando:'\ud83d\udc41 Monitorando' };
+const _EF_COR      = { efetiva:'var(--eq-green)', inefetiva:'var(--eq-red)', monitorando:'var(--eq-blue)' };
+
+function renderHistoricoInspecoes(inspecoes) {
+  if (!inspecoes || !inspecoes.length) return '';
+
+  // Monta timeline a partir de TODOS os registros de inspeção dessa UC
+  const eventos = [];
+  for (const insp of inspecoes) {
+    const acoes = Array.isArray(insp.historico_acoes) ? insp.historico_acoes : [];
+    for (const ev of acoes) {
+      eventos.push({ ...ev, fiscal_reg: insp.fiscal });
+    }
+    // Se não tem histórico gravado mas tem delegação, mostra ao menos a delegação
+    if (!acoes.length && insp.delegado_em) {
+      eventos.push({
+        tipo: 'delegacao', em: insp.delegado_em,
+        status_novo: insp.status, fiscal: insp.fiscal,
+        fiscal_reg: insp.fiscal
+      });
+    }
+  }
+  eventos.sort((a,b) => (a.em||'') > (b.em||'') ? 1 : -1);
+
+  // Estado atual (último registro de inspeção)
+  const ultimo = inspecoes.sort((a,b) => (b.delegado_em||'') > (a.delegado_em||'') ? 1 : -1)[0];
+  const stAtual = _STATUS_LBL[ultimo.status] || ultimo.status || '\u2014';
+  const efManut = ultimo.efetividade_manutencao;
+  const efInsp  = ultimo.efetividade_inspecao;
+
+  const estadoHtml = `
+    <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-bottom:16px">
+      <div style="font-size:.85rem"><strong>Fiscal:</strong> ${ultimo.fiscal||'\u2014'}</div>
+      <div style="font-size:.85rem"><strong>Status:</strong> <span style="font-weight:700">${stAtual}</span></div>
+      ${ultimo.acao ? `<div style="font-size:.85rem"><strong>A\u00e7\u00e3o:</strong> ${_ACAO_LBL[ultimo.acao]||ultimo.acao}</div>` : ''}
+      ${ultimo.acao_status ? `<div style="font-size:.85rem"><strong>Execu\u00e7\u00e3o:</strong> ${_EXEC_LBL[ultimo.acao_status]||ultimo.acao_status}</div>` : ''}
+      ${efManut ? `<div style="font-size:.78rem;font-weight:700;color:${_EF_COR[efManut]||'inherit'}">\ud83d\udd27 ${_EF_LBL[efManut]||efManut}</div>` : ''}
+      ${efInsp  ? `<div style="font-size:.78rem;font-weight:700;color:${_EF_COR[efInsp] ||'inherit'}">\ud83d\udc41 ${_EF_LBL[efInsp] ||efInsp}</div>`  : ''}
+    </div>`;
+
+  if (!eventos.length) {
+    return `<div class="result-card" style="margin-top:24px;border-left:4px solid var(--eq-blue)">
+      <div class="gantt-title" style="margin-bottom:12px">\ud83d\udccb Hist\u00f3rico de Inspe\u00e7\u00f5es</div>
+      ${estadoHtml}
+      <div style="color:var(--eq-gray-400);font-size:.8rem;text-align:center;padding:16px">Nenhuma a\u00e7\u00e3o registrada ainda.</div>
+    </div>`;
+  }
+
+  const linhas = eventos.map((ev, idx) => {
+    const cor   = _TIPO_COR[ev.tipo] || 'var(--eq-gray-500)';
+    const label = _TIPO_LBL[ev.tipo] || ev.tipo;
+    const isLast = idx === eventos.length - 1;
+
+    let detalhe = '';
+    if (ev.status_anterior && ev.status_novo && ev.status_anterior !== ev.status_novo) {
+      detalhe += `<span style="font-size:.72rem;color:var(--eq-gray-500)">${_STATUS_LBL[ev.status_anterior]||ev.status_anterior} \u2192 ${_STATUS_LBL[ev.status_novo]||ev.status_novo}</span><br>`;
+    } else if (ev.status_novo) {
+      detalhe += `<span style="font-size:.72rem;color:var(--eq-gray-500)">${_STATUS_LBL[ev.status_novo]||ev.status_novo}</span><br>`;
+    }
+    if (ev.fiscal) detalhe += `<span style="font-size:.72rem">Fiscal: <strong>${ev.fiscal}</strong></span><br>`;
+    if (ev.acao)   detalhe += `<span style="font-size:.72rem">${_ACAO_LBL[ev.acao]||ev.acao}</span><br>`;
+    if (ev.acao_status) detalhe += `<span style="font-size:.72rem">Execu\u00e7\u00e3o: ${_EXEC_LBL[ev.acao_status]||ev.acao_status}</span><br>`;
+    if (ev.executado_por) detalhe += `<span style="font-size:.72rem">\ud83d\udc77 ${ev.executado_por}</span><br>`;
+    if (ev.data_execucao) detalhe += `<span style="font-size:.72rem">\ud83d\udcc5 Executado em: ${fmtDate(ev.data_execucao)}</span><br>`;
+    if (ev.obs_inspecao)  detalhe += `<span style="font-size:.72rem;font-style:italic;color:var(--eq-gray-600)">"\ud83d\udcdd ${ev.obs_inspecao}"</span><br>`;
+    if (ev.obs_conclusao) detalhe += `<span style="font-size:.72rem;font-style:italic;color:var(--eq-green)">\u2713 ${ev.obs_conclusao}</span><br>`;
+
+    return `<div style="display:flex;gap:14px;position:relative">
+      <div style="display:flex;flex-direction:column;align-items:center;min-width:16px">
+        <div style="width:12px;height:12px;border-radius:50%;background:${cor};border:2.5px solid #fff;box-shadow:0 0 0 1.5px ${cor};z-index:1;flex-shrink:0"></div>
+        ${!isLast ? `<div style="width:2px;flex:1;background:var(--eq-gray-200);margin:2px 0"></div>` : ''}
+      </div>
+      <div style="padding-bottom:${isLast?'0':'16'}px;flex:1">
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <span style="font-size:.8rem;font-weight:700;color:${cor}">${label}</span>
+          <span style="font-size:.68rem;color:var(--eq-gray-400)">${fmtDate(ev.em)}</span>
+        </div>
+        <div style="margin-top:2px;line-height:1.5">${detalhe}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  return `<div class="result-card" style="margin-top:24px;border-left:4px solid var(--eq-blue)">
+    <div class="gantt-title" style="margin-bottom:12px">\ud83d\udccb Hist\u00f3rico de Inspe\u00e7\u00f5es</div>
+    ${estadoHtml}
+    <div style="padding-left:4px">${linhas}</div>
+  </div>`;
+}
 // ===== GANTT =====
 function renderGantt(historico){
   if(!historico||!historico.length)return'';
@@ -81,17 +178,20 @@ async function pesquisarUC(uc){
     const ucVariants = [...new Set([ucSanitized, uc.trim()])];
 
     // Busca em paralelo todas as variações
-    let histDoc = null, recenteDocs = [], ativasDocs = [];
+    let histDoc = null, recenteDocs = [], ativasDocs = [], inspecoesDocs = [];
     for (const ucVar of ucVariants) {
-      const [h, r, a] = await Promise.all([
+      const [h, r, a, ins] = await Promise.all([
         db.from('historico').select('*').eq('uc', ucVar).maybeSingle(),
         db.from('historico_recente').select('*').eq('uc', ucVar),
-        db.from('visao_atual').select('*').eq('uc', ucVar)
+        db.from('visao_atual').select('*').eq('uc', ucVar),
+        db.from('inspecoes').select('*').eq('uc', ucVar)
       ]);
       if (h.data && !histDoc) histDoc = h.data;
       if (r.data?.length) recenteDocs = [...recenteDocs, ...r.data];
       if (a.data?.length) ativasDocs = [...ativasDocs, ...a.data];
+      if (ins.data?.length) inspecoesDocs = [...inspecoesDocs, ...ins.data];
     }
+    inspecoesDocs = inspecoesDocs.filter((a,i,arr)=>arr.findIndex(x=>x.id===a.id)===i);
     // Remove duplicatas por ocorrencia/id
     recenteDocs = recenteDocs.filter((r,i,arr)=>arr.findIndex(x=>x.id===r.id)===i);
     ativasDocs  = ativasDocs.filter((a,i,arr)=>arr.findIndex(x=>x.ocorrencia===a.ocorrencia)===i);
@@ -190,7 +290,8 @@ async function pesquisarUC(uc){
         </div>
       </div>
       ${renderGantt(historicoCompleto)}
-      ${renderTabela(historicoCompleto)}`;
+      ${renderTabela(historicoCompleto)}
+      ${renderHistoricoInspecoes(inspecoesDocs)}`;
 
   } catch(err){
     console.error(err);
