@@ -16,6 +16,33 @@ function calcPct90(dc){if(!dc)return 0;const ini=new Date(dc),fim=new Date(ini.g
 let _lista=[], _criterio='menor-tempo', _filtro='', _filtroCard='todos', _filtroInsp='todos';
 let _paginaAtual=1, _porPagina=20, _filtroMunicipio='';
 let _histTodos=[], _chartReincidencia=null;
+
+// ============================================================
+// HISTÓRICO DE AÇÕES (compartilhado com inspecoes.js)
+// ============================================================
+function buildEvento(insp, payload, tipo) {
+  const ev = {
+    tipo,
+    em: new Date().toISOString(),
+    status_anterior: insp?.status || null,
+    status_novo:     payload.status ?? insp?.status ?? null,
+  };
+  if (payload.fiscal)              ev.fiscal = payload.fiscal;
+  if (payload.observacao)          ev.obs_inspecao = payload.observacao;
+  if (payload.acao)                ev.acao = payload.acao;
+  if (payload.acao_status)         ev.acao_status = payload.acao_status;
+  if (payload.acao_executada_por)  ev.executado_por = payload.acao_executada_por;
+  if (payload.acao_executada_em)   ev.data_execucao = payload.acao_executada_em;
+  if (payload.conclusao_obs)       ev.obs_conclusao = payload.conclusao_obs;
+  return ev;
+}
+
+function appendHistorico(insp, evento) {
+  const arr = Array.isArray(insp?.historico_acoes) ? [...insp.historico_acoes] : [];
+  arr.push(evento);
+  return arr;
+}
+
 let _inspecoesMap = {}; // uc → inspecao mais recente
 
 // ============================================================
@@ -134,13 +161,12 @@ async function salvarDelegacaoEmMassa() {
   for (const uc of ucs) {
     try {
       const existente = _inspecoesMap[uc];
-      // Volta ao estado "pendente": zera execução e efetividade para não
-      // herdar veredito de uma inspeção anterior da mesma UC.
       const payload = { uc, fiscal, status: 'pendente', acao: null, observacao: null,
         dias_restantes: null, data_saida: null, inspecionado_em: null,
         acao_status: null, acao_executada_por: null, acao_executada_em: null,
         conclusao_obs: null, efetividade_manutencao: null, efetividade_inspecao: null,
         reincidencia_em: null };
+      payload.historico_acoes = appendHistorico(existente, buildEvento(existente, payload, 'delegacao'));
       if (existente?.id) {
         const { error } = await db.from('inspecoes').update(payload).eq('id', existente.id);
         if (error) throw error;
@@ -308,13 +334,17 @@ async function salvarDelegacao() {
     // Deixou de ser OK → limpa efetividade da inspeção
     if (status !== 'ok') payload.efetividade_inspecao = null;
 
+    // ── HISTÓRICO ─────────────────────────────────────────────
+    const tipoEv = existente?.id
+      ? (status !== 'pendente' && existente.status === 'pendente' ? 'inspecao' : 'delegacao')
+      : 'delegacao';
+    payload.historico_acoes = appendHistorico(existente, buildEvento(existente, payload, tipoEv));
+
     let error;
 
     if (existente?.id) {
-      // Atualiza registro existente
       ({ error } = await db.from('inspecoes').update(payload).eq('id', existente.id));
     } else {
-      // Insere novo registro
       payload.delegado_em = new Date().toISOString();
       ({ error } = await db.from('inspecoes').insert(payload));
     }
