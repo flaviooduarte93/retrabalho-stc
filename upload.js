@@ -456,20 +456,45 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---- Processa as linhas TF da MESMA planilha e grava no painel ----
   //  Recebe `rowsObj`: array de objetos {coluna: valor}, já com o
   //  cabeçalho resolvido (o upload.js monta isso na função processAtual).
+  // Decide se uma linha é da regional GOIÂNIA (o painel é só de Goiânia).
+  // O sistema de Retrabalho tem telas de Goiânia e Metropolitana, mas o
+  // arquivo tem a mesma estrutura — então a separação é pelo conteúdo.
+  // Aceita variações de acento e caixa. Se a Regional não disser, usa a
+  // Seccional. Uma linha só é DESCARTADA se for claramente de outra região.
+  function ehGoiania(r) {
+    const norm = s => String(s ?? '')
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '')  // tira acento
+      .toUpperCase().trim();
+    const regional  = norm(r['Regional']);
+    const seccional = norm(r['Seccional']);
+
+    // Metropolitana explícita em qualquer um dos campos → fora.
+    if (regional.includes('METRO') || seccional.includes('METRO')) return false;
+
+    // Goiânia explícita → dentro.
+    if (regional.includes('GOIANIA') || seccional.includes('GOIANIA')) return true;
+
+    // Sem pista clara: mantém (evita perder ocorrência de Goiânia por um
+    // rótulo diferente). Ajuste aqui se a Metro usar outro texto.
+    return true;
+  }
+
   async function enviarTFparaPainel(rowsObj, fileName) {
     const db = getReincClient();
     if (!db) return;
 
-    // Mesmo filtro do painel: Abrangência TF e estado não finalizado.
-    const tf = rowsObj.filter(r => {
+    // Filtro do painel: TF, não finalizada E da regional Goiânia.
+    const tfTotal = rowsObj.filter(r => {
       const ab = txt(r['Abrangência']).toUpperCase();
       const es = txt(r['Estado']).toUpperCase();
       return ab === 'TF' && es && !es.startsWith('F-');
     });
+    const tf = tfTotal.filter(ehGoiania);
+    const descartadasMetro = tfTotal.length - tf.length;
 
-    console.log(`[TF→painel] ${tf.length} ocorrências TF ativas encontradas na planilha.`);
+    console.log(`[TF→painel] ${tf.length} TF de Goiânia (${descartadasMetro} de outra região descartadas, de ${tfTotal.length} TF ativas).`);
     if (!tf.length) {
-      // Sem TF ativa: zera a tabela para o painel não mostrar dado velho.
+      // Sem TF de Goiânia: zera a tabela para o painel não mostrar dado velho.
       try { await db.from('tempo_real_ocorrencias').delete().neq('id', 0); } catch (e) {}
       return;
     }
