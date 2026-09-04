@@ -123,13 +123,18 @@ async function processHistorico(file) {
   const ucKeys = Object.keys(byUC);
   setStatus('status-historico', `⏳ Processando ${ucKeys.length} UCs...`, 'loading');
 
-  // Salva alimentador e municipio ANTES de apagar — serão restaurados no insert
+  // Salva alimentador e/ou municipio ANTES de apagar — serão restaurados no insert
   const _rc = typeof getRegional === 'function' ? getRegional() : null;
   const _savedAlim = {}, _savedMuni = {};
   try {
+    // Monta SELECT só com colunas que existem nesta regional
+    const _selCols = ['uc'];
+    if (_rc?.features?.alimentador) _selCols.push('alimentador');
+    if (_rc?.features?.municipio)   _selCols.push('municipio');
+
     let _page = 0, _savedAll = [];
     while (true) {
-      const { data: _s } = await db.from('historico').select('uc,alimentador,municipio')
+      const { data: _s } = await db.from('historico').select(_selCols.join(','))
         .range(_page * 1000, _page * 1000 + 999);
       if (!_s?.length) break;
       _savedAll = _savedAll.concat(_s);
