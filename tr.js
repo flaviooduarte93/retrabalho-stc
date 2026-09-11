@@ -19,13 +19,14 @@
 //  └──────────────────────────────────────────────────────────┘
 //
 //  COMO INSTALAR
-//  1. Rode add_tempo_real.sql no Supabase do painel (reinc_trafo),
-//     se ainda não rodou.
-//  2. Copie este arquivo para CADA página do Retrabalho, trocando
-//     só a linha REGIONAL abaixo (GYN na de Goiânia, METRO na da
-//     Metropolitana). Cole DEPOIS do upload.js.
-//  3. Confirme que o SheetJS (XLSX) já está na página (o upload.js
-//     usa, então já deve estar).
+//  1. Rode add_tempo_real.sql e add_regional.sql no Supabase do
+//     painel (reinc_trafo), se ainda não rodou.
+//  2. Este script se pendura no input #file-recente (o mesmo que o
+//     upload-recente.js usa para subir o decômetro). Carregue-o na
+//     página DEPOIS do upload-recente.js, com <script src="tr.js">.
+//  3. Na página de Goiânia deixe REGIONAL='GYN'; na da Metropolitana,
+//     uma cópia com REGIONAL='METRO'.
+//  4. O SheetJS (XLSX) já está na página (o Retrabalho usa), então ok.
 // ============================================================
 
 (function () {
@@ -157,38 +158,48 @@
     }
   }
 
-  // ---- Pendura no mesmo input do Retrabalho (file-atual) ----
+  // Lê uma planilha e devolve as linhas como objetos {coluna: valor}.
+  function lerPlanilha(buf) {
+    const wb = XLSX.read(buf);
+    const allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:'' });
+    let hIdx = -1;
+    for (let i = 0; i < Math.min(6, allRows.length); i++) {
+      if (allRows[i].some(c => String(c).trim() === 'Número')) { hIdx = i; break; }
+    }
+    if (hIdx === -1) return [];
+    const headers = allRows[hIdx].map(h => String(h).trim());
+    return allRows.slice(hIdx + 1)
+      .filter(r => r.some(c => c !== ''))
+      .map(r => { const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ''; }); return o; });
+  }
+
+  // ---- Pendura no input das ocorrências recentes do Retrabalho ----
+  // O decômetro sobe pelo input #file-recente (upload-recente.js), que
+  // aceita VÁRIOS arquivos de uma vez. O #file-atual do sistema antigo
+  // não é mais usado para isso.
   function bind() {
-    const fa = document.getElementById('file-atual');
-    if (!fa) { console.warn('[TF→painel] input #file-atual não encontrado.'); return; }
+    const fr = document.getElementById('file-recente');
+    if (!fr) { console.warn('[TF→painel] input #file-recente não encontrado.'); return; }
 
-    fa.addEventListener('change', async e => {
-      const file = e.target.files && e.target.files[0];
-      if (!file) return;
+    fr.addEventListener('change', async e => {
+      const files = Array.from(e.target.files || []);
+      if (!files.length) return;
       try {
-        const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf);
-        const allRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header:1, defval:'' });
-
-        let hIdx = -1;
-        for (let i = 0; i < Math.min(6, allRows.length); i++) {
-          if (allRows[i].some(c => String(c).trim() === 'Número')) { hIdx = i; break; }
+        // Junta as linhas de TODOS os arquivos subidos (podem ser vários meses).
+        let todas = [];
+        for (const file of files) {
+          const buf = await file.arrayBuffer();
+          todas = todas.concat(lerPlanilha(buf));
         }
-        if (hIdx === -1) { console.warn('[TF→painel] cabeçalho não encontrado.'); return; }
-
-        const headers = allRows[hIdx].map(h => String(h).trim());
-        const rowsObj = allRows.slice(hIdx + 1)
-          .filter(r => r.some(c => c !== ''))
-          .map(r => { const o = {}; headers.forEach((h, i) => { o[h] = r[i] ?? ''; }); return o; });
-
-        await enviarTFparaPainel(rowsObj, file.name);
+        const nome = files.length === 1 ? files[0].name : `${files.length} arquivos`;
+        await enviarTFparaPainel(todas, nome);
       } catch (err) {
         console.warn('[TF→painel] erro ao processar planilha:', err.message);
       }
-      // NÃO limpa e.target.value — deixa o handler do Retrabalho cuidar disso.
+      // NÃO limpa e.target.value — o handler do Retrabalho cuida disso.
     });
 
-    console.log(`[TF→painel/${regionalDaPagina()}] pronto: ocorrências TF desta planilha irão ao painel de reincidência.`);
+    console.log(`[TF→painel/${regionalDaPagina()}] pronto: ocorrências TF do decômetro irão ao painel de reincidência.`);
   }
 
   if (document.readyState === 'loading') {
