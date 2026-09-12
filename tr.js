@@ -2,44 +2,39 @@
 //  PATCH — envia as ocorrências TF (transformadores) ao painel
 //  de Reincidência, na MESMA planilha que o Retrabalho já sobe.
 //
-//  O upload.js do Retrabalho filtra Abrangência = 'CR' (por UC).
+//  O upload-recente.js do Retrabalho filtra Abrangência = 'CR' (por UC).
 //  O painel de Reincidência precisa de 'TF' (por transformador).
-//  São recortes disjuntos da mesma extração — então dá para
-//  separar os dois na mesma passada, sem subir o arquivo 2x.
+//  São recortes disjuntos da mesma extração — então dá para separar
+//  os dois na mesma passada, sem subir o arquivo duas vezes.
 //
-//  ┌──────────────────────────────────────────────────────────┐
-//  │  IMPORTANTE — DEFINA A REGIONAL DESTA PÁGINA (abaixo)      │
-//  │                                                            │
-//  │  O Retrabalho tem uma página de Goiânia e outra da         │
-//  │  Metropolitana. A regional NÃO é adivinhada pelo conteúdo  │
-//  │  da planilha — é definida pela PÁGINA. Por isso, na página │
-//  │  de Goiânia use REGIONAL = 'GYN'; na da Metropolitana,     │
-//  │  REGIONAL = 'METRO'. Cada página carrega a sua cópia deste │
-//  │  arquivo com o valor certo.                                │
-//  └──────────────────────────────────────────────────────────┘
+//  REGIONAL AUTOMÁTICA
+//  O Retrabalho é uma página só, e a regional (Goiânia/Metropolitana)
+//  é escolhida no seletor com senha — valor guardado em
+//  sessionStorage('regional'). Este script lê essa MESMA fonte, então
+//  UM único tr.js serve as duas regionais: o que estiver selecionado
+//  no momento do upload é o carimbo aplicado. Não há versão separada.
 //
 //  COMO INSTALAR
 //  1. Rode add_tempo_real.sql e add_regional.sql no Supabase do
 //     painel (reinc_trafo), se ainda não rodou.
-//  2. Este script se pendura no input #file-recente (o mesmo que o
-//     upload-recente.js usa para subir o decômetro). Carregue-o na
-//     página DEPOIS do upload-recente.js, com <script src="tr.js">.
-//  3. Na página de Goiânia deixe REGIONAL='GYN'; na da Metropolitana,
-//     uma cópia com REGIONAL='METRO'.
-//  4. O SheetJS (XLSX) já está na página (o Retrabalho usa), então ok.
+//  2. Inclua no index.html, DEPOIS do upload-recente.js:
+//        <script src="upload-recente.js"></script>
+//        <script src="tr.js"></script>          ← adicionar esta linha
+//  3. O SheetJS (XLSX) já está na página (o Retrabalho usa), então ok.
+// ============================================================
 // ============================================================
 
 (function () {
   'use strict';
 
-  // ⇩⇩⇩ TROQUE AQUI POR PÁGINA: 'GYN' (Goiânia) ou 'METRO' (Metropolitana) ⇩⇩⇩
-  const REGIONAL = 'GYN';
-  // ⇧⇧⇧ ————————————————————————————————————————————————————————————— ⇧⇧⇧
-
-  // Se a página do Retrabalho já expõe getRegional(), tenta usar como
-  // reforço — mas a constante REGIONAL acima sempre tem a palavra final.
+  // A regional NÃO é fixa: o Retrabalho é uma página só, e o usuário escolhe
+  // Goiânia ou Metropolitana num seletor cujo valor fica em
+  // sessionStorage('regional') = 'goiania' | 'metropolitana'.
+  // Lemos a mesma fonte para carimbar cada ocorrência na regional correta.
   function regionalDaPagina() {
-    return (REGIONAL === 'METRO') ? 'METRO' : 'GYN';
+    let sel = '';
+    try { sel = String(sessionStorage.getItem('regional') || '').toLowerCase(); } catch (e) {}
+    return sel.startsWith('metro') ? 'METRO' : 'GYN';
   }
 
   // ---- Cliente do Supabase do PAINEL DE REINCIDÊNCIA (reinc_trafo) ----
@@ -50,9 +45,17 @@
   let sbReinc = null;
   function getReincClient() {
     if (sbReinc) return sbReinc;
-    const lib = window.supabase;
-    if (!lib || !lib.createClient) {
-      console.warn('[TF→painel] supabase-js não encontrado na página. Envio TF ignorado.');
+    // A biblioteca supabase-js expõe createClient em window.supabase. Mas se
+    // o Retrabalho sobrescreveu 'supabase' com a INSTÂNCIA do cliente dele,
+    // procuramos a fábrica em locais alternativos antes de desistir.
+    const lib =
+      (window.supabase && window.supabase.createClient) ? window.supabase :
+      (window.supabaseJs && window.supabaseJs.createClient) ? window.supabaseJs :
+      (typeof supabase !== 'undefined' && supabase && supabase.createClient) ? supabase :
+      null;
+    if (!lib) {
+      console.warn('[TF→painel] Biblioteca supabase-js (createClient) não encontrada. '
+        + 'Verifique se <script src="tr.js"> vem depois do supabase-js. Envio TF ignorado.');
       return null;
     }
     sbReinc = lib.createClient(REINC_URL, REINC_KEY);
