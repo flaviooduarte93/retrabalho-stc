@@ -111,7 +111,7 @@
       return {
         oe: txt(r['Número']), estado: txt(r['Estado']),
         inicio: ini ? ini.toISOString() : null,
-        duracao_arq: txt(r['Duração']), conjunto: txt(r['Conjunto Elétrico']),
+        duracao_arq: txt(r['Duração']), conjunto: txt(r['Conjunto Geográfico']) || txt(r['Conjunto Elétrico']),
         trafo: txt(r['Ponto Elétrico']).toUpperCase(),
         clientes: int(r['Clts > 3 min']), clts_max: int(r['Clts Af Max']),
         equipe: semTraco(r['Equipe']) || null, chi: num(r['CHI']), dec: num(r['DEC']),
