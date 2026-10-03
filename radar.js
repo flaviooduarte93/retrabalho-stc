@@ -62,7 +62,7 @@
   const COLS = {
     numero:'NUMERO', abrangencia:'ABRANGENCIA', estado:'ESTADO', ini:'DATA INICIO', fim:'DATA FIM',
     regional:'REGIONAL', seccional:'SECCIONAL', municipio:'MUNICIPIO', natureza:'NATUREZA', causa:'CAUSA', sub_causa:'SUB CAUSA',
-    clientes:'CLTS > 3 MIN', chi:'CHI', dec:'DEC', fec:'FEC', conjunto_eletrico:'CONJUNTO ELETRICO', conjunto_geografico:'CONJUNTO GEOGRAFICO',
+    clientes:'CLTS > 3 MIN', clientes_af_max:'CLTS AF MAX', chi:'CHI', dec:'DEC', fec:'FEC', conjunto_eletrico:'CONJUNTO ELETRICO', conjunto_geografico:'CONJUNTO GEOGRAFICO',
     oco_id:'OCORRENCIA ID', se:'SE', al:'AL', ponto_eletrico:'PONTO ELETRICO', tipo_ponto:'TIPO PONTO ELETRICO', equipe:'EQUIPE',
     tmp:'TMP', tmd:'TMD', tme:'TME', tma:'TMA', r90:'R90'
   };
@@ -107,7 +107,7 @@
         data_inicio: ini, data_fim: fim, duracao_min: dur!=null?Math.round(dur):null, regional: reg,
         seccional: clean(g(r,'seccional')), municipio: clean(norm(g(r,'municipio'))), natureza: clean(norm(g(r,'natureza'))),
         causa: clean(String(g(r,'causa')).replace(/\s+/g,' ').trim()), sub_causa: clean(g(r,'sub_causa')),
-        clientes: pNum(g(r,'clientes')), chi: pNum(g(r,'chi')), dec: pNum(g(r,'dec')), fec: pNum(g(r,'fec')),
+        clientes: pNum(g(r,'clientes')), clientes_af_max: pNum(g(r,'clientes_af_max')), chi: pNum(g(r,'chi')), dec: pNum(g(r,'dec')), fec: pNum(g(r,'fec')),
         conjunto_eletrico: clean(norm(g(r,'conjunto_eletrico'))), conjunto_geografico: clean(norm(g(r,'conjunto_geografico'))),
         se: clean(g(r,'se')), al: clean(g(r,'al')), ponto_eletrico: clean(String(g(r,'ponto_eletrico')).trim().toUpperCase()),
         tipo_ponto: clean(g(r,'tipo_ponto')), equipe: normEquipe(g(r,'equipe')),
